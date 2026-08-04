@@ -54,7 +54,7 @@
   .card{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff;transition:.18s;display:flex;flex-direction:column}
   .card.sel{border-color:var(--accent);box-shadow:0 0 0 2px rgba(59,58,53,.12)}
   .thumb{aspect-ratio:1/.82;background:linear-gradient(160deg,#f2efe6,#e7e3d7);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
-  .thumb img{width:100%;height:100%;object-fit:cover}
+  .thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
   .thumb svg{width:54px;height:54px;opacity:.72}
   .badge{position:absolute;top:10px;left:10px;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:#6f6c62;background:rgba(255,255,255,.82);padding:3px 8px;border-radius:999px;backdrop-filter:blur(4px)}
   .stockpill{position:absolute;top:10px;right:10px;font-size:11px;font-weight:600;padding:3px 8px;border-radius:999px;background:#eef2ec;color:var(--good)}
@@ -205,14 +205,12 @@
     cardsEl.innerHTML=list.map(p=>{
       const left=p.stock-p.qty;
       const lowStock=p.stock<=0;
-      const thumb=p.image
-        ? `<img src="${p.image}" alt="" loading="lazy" onerror="this.replaceWith(document.createRange().createContextualFragment(\`${ICONS[p.cat].replace(/`/g,'')}\`))">`
-        : ICONS[p.cat];
+      const img=p.image?`<img src="${p.image}" alt="" loading="lazy" onerror="this.remove()">`:'';
       return `<div class="card ${p.qty>0?'sel':''}" data-id="${p.id}">
         <div class="thumb">
           <span class="badge">${CATLABEL[p.cat]}</span>
           <span class="stockpill ${lowStock?'low':''}">Stock ${p.stock}</span>
-          ${thumb}
+          ${ICONS[p.cat]}${img}
         </div>
         <div class="cbody">
           <div class="pname">${p.name}</div>
