@@ -105,6 +105,14 @@ function readAttachmentToken(v) {
   return null;
 }
 const CAT_MAP = { Diffuser: "diffuser", "Aroma Oil": "oil", "Kit / Set": "kit", Kit: "kit" };
+// Decide the website tab: kits/sets/candles win by name, else Lark category, else guess by name.
+function catFor(catText, name) {
+  const n = (name || "").toLowerCase();
+  if (/\b(kit|set|candle)\b/.test(n)) return "kit";
+  if (CAT_MAP[catText]) return CAT_MAP[catText];
+  if (n.includes("oil")) return "oil";
+  return "diffuser";
+}
 
 // ---- API handlers -----------------------------------------------------------
 
@@ -119,13 +127,18 @@ async function getProducts() {
     for (const rec of j.data.items || []) {
       const f = rec.fields || {};
       const catText = readText(f["Category"]);
+      const name = readText(f["Product Name"]);
       const imgToken = readAttachmentToken(f["Image"]);
+      // Compute stock from source fields (Initial Stock updates instantly, unlike
+      // the "Current Stock" formula which lags in the API after bulk edits).
+      const stock =
+        readNumber(f["Initial Stock"]) + readNumber(f["Total Received"]) - readNumber(f["To Bring"]);
       items.push({
         id: rec.record_id,
-        name: readText(f["Product Name"]),
-        cat: CAT_MAP[catText] || "diffuser",
+        name,
+        cat: catFor(catText, name),
         catText,
-        stock: readNumber(f["Current Stock"]),
+        stock,
         image: imgToken ? `/api/image/${imgToken}` : null,
       });
     }
