@@ -187,8 +187,6 @@ function readBody(req) {
     req.on("end", () => { try { resolve(d ? JSON.parse(d) : {}); } catch { resolve({}); } });
   });
 }
-let _prodCache = { t: 0, data: null };
-
 const server = http.createServer(async (req, res) => {
   const url = req.url.split("?")[0];
   try {
@@ -196,11 +194,8 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true, appIdSet: !!CFG.appId, secretSet: !!CFG.appSecret, domain: CFG.domain });
     }
     if (url === "/api/products" && req.method === "GET") {
-      const now = Date.now();
-      if (!_prodCache.data || now - _prodCache.t > 30_000) {
-        _prodCache = { t: now, data: await getProducts() };
-      }
-      return sendJson(res, 200, { ok: true, products: _prodCache.data });
+      const products = await getProducts();
+      return sendJson(res, 200, { ok: true, products });
     }
     if (url.startsWith("/api/image/") && req.method === "GET") {
       const token = url.slice("/api/image/".length);
