@@ -36,6 +36,9 @@
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   @media(max-width:620px){.grid2{grid-template-columns:1fr}}
   label.f{display:block;font-size:12px;color:var(--muted);margin-bottom:6px;letter-spacing:.02em}
+  .req{color:var(--warn);font-weight:700}
+  .field.dt input{cursor:pointer}
+  .field.dt input::-webkit-calendar-picker-indicator{cursor:pointer;opacity:.7}
   .field input{
     width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:10px;font-size:14px;
     background:#fcfbf7;color:var(--ink);font-family:inherit;transition:.15s;
@@ -126,10 +129,10 @@
   <div class="section">
     <h2>Shoot Details</h2>
     <div class="grid2">
-      <div class="field"><label class="f">Talent Name</label><input id="talent" placeholder="Enter talent name"></div>
-      <div class="field"><label class="f">Address</label><input id="addr" placeholder="Shoot location"></div>
-      <div class="field"><label class="f">Shooting Date</label><input id="sdate" type="date"></div>
-      <div class="field"><label class="f">Shooting Time</label><input id="stime" type="time"></div>
+      <div class="field"><label class="f">Talent Name <span class="req">*</span></label><input id="talent" placeholder="Enter talent name" required></div>
+      <div class="field"><label class="f">Address <span class="req">*</span></label><input id="addr" placeholder="Shoot location" required></div>
+      <div class="field dt"><label class="f">Shooting Date <span class="req">*</span></label><input id="sdate" type="date" required onclick="this.showPicker&&this.showPicker()"></div>
+      <div class="field dt"><label class="f">Shooting Time <span class="req">*</span></label><input id="stime" type="time" required onclick="this.showPicker&&this.showPicker()"></div>
     </div>
   </div>
 
@@ -152,7 +155,7 @@
 <!-- STICKY BAR -->
 <div class="bar">
   <div class="barin">
-    <div class="summ"><b id="totalUnits">0</b> units · <span id="totalItems">0</span> products selected</div>
+    <div class="summ"><b id="totalUnits">0</b> units · <span id="totalItems">0</span> products<span id="hint" style="color:var(--warn)"></span></div>
     <button class="cta" id="createBtn" disabled>Create PR Shoot →</button>
   </div>
 </div>
@@ -241,13 +244,22 @@
   });
   document.getElementById('search').addEventListener('input',e=>{q=e.target.value.toLowerCase();render();});
 
+  function detailsOk(){
+    return ['talent','addr','sdate','stime'].every(id=>document.getElementById(id).value.trim()!=='');
+  }
   function updateBar(){
     const sel=P.filter(p=>p.qty>0);
     const units=sel.reduce((s,p)=>s+p.qty,0);
     document.getElementById('totalUnits').textContent=units;
     document.getElementById('totalItems').textContent=sel.length;
-    document.getElementById('createBtn').disabled=units===0;
+    const ok=units>0 && detailsOk();
+    document.getElementById('createBtn').disabled=!ok;
+    const hint=document.getElementById('hint');
+    if(units===0) hint.textContent=' · pick at least 1 unit';
+    else if(!detailsOk()) hint.textContent=' · fill all shoot details';
+    else hint.textContent='';
   }
+  ['talent','addr','sdate','stime'].forEach(id=>document.getElementById(id).addEventListener('input',updateBar));
 
   const overlay=document.getElementById('overlay');
   function showSuccess(talent,d,t,sel,units){
