@@ -1,0 +1,13 @@
+{
+  "name": "hiessence-connector",
+  "version": "1.0.0",
+  "description": "Backend connector + website for hiessence PR Shoot inventory (reads Products from Lark Base, creates PR Shoots + Shoot Items). Zero dependencies.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

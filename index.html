@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>hiessence · New PR Shoot</title>
+<style>
+  :root{
+    --cream:#f6f4ec; --cream2:#efece1; --ink:#2b2b28; --muted:#8b887e;
+    --line:#e4e0d4; --silver:#c9c7bf; --accent:#3b3a35; --good:#4b7d5b; --warn:#b06a4a;
+    --card:#ffffff; --shadow:0 1px 2px rgba(40,38,32,.05),0 8px 24px rgba(40,38,32,.06);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--cream); color:var(--ink); line-height:1.5;
+    -webkit-font-smoothing:antialiased; padding-bottom:120px;
+  }
+  .banner{background:#2b2b28;color:#e9e6dc;font-size:12px;text-align:center;padding:7px 16px;letter-spacing:.02em}
+  .banner b{color:#fff}
+  header.top{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:16px 22px;border-bottom:1px solid var(--line);background:var(--cream);
+    position:sticky;top:0;z-index:20;
+  }
+  .brand{display:flex;align-items:center;gap:10px}
+  .brand .logo{width:30px;height:30px;border-radius:8px;background:linear-gradient(145deg,#d9d7cd,#b7b5ab);display:flex;align-items:center;justify-content:center}
+  .brand .logo svg{width:16px;height:16px}
+  .brand .name{font-weight:600;letter-spacing:.04em;font-size:15px}
+  .brand .sub{font-size:11px;color:var(--muted);letter-spacing:.14em;text-transform:uppercase}
+  .wrap{max-width:960px;margin:0 auto;padding:26px 20px 40px}
+  h1.title{font-size:26px;font-weight:600;letter-spacing:-.01em;margin-bottom:4px}
+  .lead{color:var(--muted);font-size:14px;margin-bottom:26px}
+  .section{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:22px;margin-bottom:20px}
+  .section h2{font-size:13px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin-bottom:16px;font-weight:600}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:620px){.grid2{grid-template-columns:1fr}}
+  label.f{display:block;font-size:12px;color:var(--muted);margin-bottom:6px;letter-spacing:.02em}
+  .field input{
+    width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:10px;font-size:14px;
+    background:#fcfbf7;color:var(--ink);font-family:inherit;transition:.15s;
+  }
+  .field input:focus{outline:none;border-color:var(--silver);background:#fff;box-shadow:0 0 0 3px rgba(201,199,191,.25)}
+
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:18px}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap}
+  .tab{padding:7px 13px;border-radius:999px;border:1px solid var(--line);background:#fcfbf7;font-size:12.5px;cursor:pointer;color:var(--muted);transition:.15s}
+  .tab.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .search{flex:1;min-width:150px}
+  .search input{width:100%;padding:9px 13px;border:1px solid var(--line);border-radius:999px;font-size:13px;background:#fcfbf7;font-family:inherit}
+  .search input:focus{outline:none;border-color:var(--silver);background:#fff}
+
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px}
+  .card{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff;transition:.18s;display:flex;flex-direction:column}
+  .card.sel{border-color:var(--accent);box-shadow:0 0 0 2px rgba(59,58,53,.12)}
+  .thumb{aspect-ratio:1/.82;background:linear-gradient(160deg,#f2efe6,#e7e3d7);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+  .thumb img{width:100%;height:100%;object-fit:cover}
+  .thumb svg{width:54px;height:54px;opacity:.72}
+  .badge{position:absolute;top:10px;left:10px;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:#6f6c62;background:rgba(255,255,255,.82);padding:3px 8px;border-radius:999px;backdrop-filter:blur(4px)}
+  .stockpill{position:absolute;top:10px;right:10px;font-size:11px;font-weight:600;padding:3px 8px;border-radius:999px;background:#eef2ec;color:var(--good)}
+  .stockpill.low{background:#f6ece6;color:var(--warn)}
+  .cbody{padding:12px 13px 14px;display:flex;flex-direction:column;gap:10px;flex:1}
+  .pname{font-size:13.5px;font-weight:600;line-height:1.3}
+  .stepper{display:flex;align-items:center;justify-content:space-between;margin-top:auto;gap:8px}
+  .stepbtns{display:flex;align-items:center;gap:0;border:1px solid var(--line);border-radius:999px;overflow:hidden}
+  .stepbtns button{width:34px;height:34px;border:none;background:#fcfbf7;font-size:18px;line-height:1;cursor:pointer;color:var(--ink);transition:.12s;display:flex;align-items:center;justify-content:center}
+  .stepbtns button:hover:not(:disabled){background:#efece1}
+  .stepbtns button:disabled{color:#cdcbc3;cursor:not-allowed}
+  .qty{min-width:34px;text-align:center;font-size:15px;font-weight:600}
+  .qty.zero{color:#c4c2ba;font-weight:500}
+  .leftnote{font-size:11px;color:var(--muted)}
+  .leftnote b{color:var(--ink)}
+
+  .bar{
+    position:fixed;left:0;right:0;bottom:0;background:rgba(246,244,236,.92);backdrop-filter:blur(10px);
+    border-top:1px solid var(--line);padding:14px 20px;z-index:30;
+  }
+  .barin{max-width:960px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+  .summ{font-size:13px;color:var(--muted)}
+  .summ b{color:var(--ink);font-size:15px}
+  .cta{background:var(--ink);color:#fff;border:none;padding:13px 26px;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;transition:.15s;letter-spacing:.01em}
+  .cta:hover{background:#000}
+  .cta:disabled{background:#bdbbb2;cursor:not-allowed}
+
+  .state{grid-column:1/-1;text-align:center;color:var(--muted);padding:34px 20px;font-size:13.5px;line-height:1.6}
+  .state b{color:var(--ink)}
+  .empty{grid-column:1/-1;text-align:center;color:var(--muted);padding:30px;font-size:13px}
+
+  .overlay{position:fixed;inset:0;background:rgba(30,29,26,.5);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
+  .overlay.on{display:flex}
+  .modal{background:#fff;border-radius:20px;max-width:460px;width:100%;padding:30px;box-shadow:0 30px 60px rgba(0,0,0,.25);animation:pop .25s ease}
+  @keyframes pop{from{transform:translateY(12px);opacity:0}to{transform:none;opacity:1}}
+  .modal .check{width:52px;height:52px;border-radius:50%;background:#e9f1ea;display:flex;align-items:center;justify-content:center;margin-bottom:16px}
+  .modal .check.err{background:#f6ece6}
+  .modal .check svg{width:26px;height:26px}
+  .modal h3{font-size:20px;margin-bottom:6px}
+  .modal p.msub{color:var(--muted);font-size:13.5px;margin-bottom:20px}
+  .flow{display:flex;flex-direction:column;gap:2px;margin-bottom:22px}
+  .flowrow{display:flex;align-items:center;gap:11px;padding:11px 0;border-bottom:1px dashed var(--line);font-size:14px}
+  .flowrow:last-child{border-bottom:none}
+  .flowrow .ic{width:30px;height:30px;border-radius:9px;background:#f2efe6;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .flowrow .ic svg{width:16px;height:16px}
+  .flowrow small{color:var(--muted);display:block;font-size:12px}
+  .modal .close{width:100%;background:var(--ink);color:#fff;border:none;padding:13px;border-radius:12px;font-weight:600;cursor:pointer;font-size:14px}
+</style>
+</head>
+<body>
+<div class="banner" id="banner">Connected to <b>Lark</b> — creating a shoot here updates your Base, calendar &amp; stock automatically.</div>
+
+<header class="top">
+  <div class="brand">
+    <div class="logo"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3c0 3-3 4-3 7a3 3 0 006 0c0-3-3-4-3-7z" fill="#4a4842"/></svg></div>
+    <div>
+      <div class="name">hiess&#234;nce</div>
+      <div class="sub">Creative</div>
+    </div>
+  </div>
+  <div style="font-size:12px;color:var(--muted)">Creative Department</div>
+</header>
+
+<div class="wrap">
+  <h1 class="title">New PR Shoot</h1>
+  <p class="lead">Enter the details, pick what to bring — all in one place.</p>
+
+  <!-- DETAILS -->
+  <div class="section">
+    <h2>Shoot Details</h2>
+    <div class="grid2">
+      <div class="field"><label class="f">Talent Name</label><input id="talent" placeholder="Enter talent name"></div>
+      <div class="field"><label class="f">Address</label><input id="addr" placeholder="Shoot location"></div>
+      <div class="field"><label class="f">Shooting Date</label><input id="sdate" type="date"></div>
+      <div class="field"><label class="f">Shooting Time</label><input id="stime" type="time"></div>
+    </div>
+  </div>
+
+  <!-- UNITS -->
+  <div class="section">
+    <h2>Units &amp; Aroma to Bring</h2>
+    <div class="toolbar">
+      <div class="tabs" id="tabs">
+        <div class="tab active" data-cat="all">All</div>
+        <div class="tab" data-cat="diffuser">Diffusers</div>
+        <div class="tab" data-cat="oil">Aroma Oils</div>
+        <div class="tab" data-cat="kit">Kits &amp; Sets</div>
+      </div>
+      <div class="search"><input id="search" placeholder="Search unit…"></div>
+    </div>
+    <div class="cards" id="cards"><div class="state">Loading products from Lark…</div></div>
+  </div>
+</div>
+
+<!-- STICKY BAR -->
+<div class="bar">
+  <div class="barin">
+    <div class="summ"><b id="totalUnits">0</b> units · <span id="totalItems">0</span> products selected</div>
+    <button class="cta" id="createBtn" disabled>Create PR Shoot →</button>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="check" id="mIcon"><svg viewBox="0 0 24 24" fill="none" stroke="#4b7d5b" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div>
+    <h3 id="mTitle">PR Shoot created</h3>
+    <p class="msub" id="mSub">Done automatically in Lark:</p>
+    <div class="flow" id="mFlow">
+      <div class="flowrow"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#4a4842" stroke-width="1.8"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div><div>Added to your <b>Calendar</b><small id="mCal">Date &amp; time set, with all the details</small></div></div>
+      <div class="flowrow"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#4a4842" stroke-width="1.8"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9z"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg></div><div>Sends a <b>Notification</b><small>To you / the team via Lark bot</small></div></div>
+      <div class="flowrow"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#4a4842" stroke-width="1.8"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg></div><div>Deducts from <b>Current Stock</b><small id="mStock">Based on the units you selected</small></div></div>
+    </div>
+    <button class="close" id="closeM">Got it</button>
+  </div>
+</div>
+
+<script>
+  const ICONS = {
+    diffuser:'<svg viewBox="0 0 24 24" fill="none" stroke="#8a887f" stroke-width="1.4"><path d="M9 7h6M8.5 7c0 5-2 4-2 9a5.5 5.5 0 0011 0c0-5-2-4-2-9" fill="#dcd9cf"/><rect x="8.5" y="4.5" width="7" height="2.6" rx=".6" fill="#c9c7bd"/></svg>',
+    oil:'<svg viewBox="0 0 24 24" fill="none" stroke="#8a887f" stroke-width="1.4"><rect x="9" y="8" width="6" height="12" rx="1.6" fill="#ded8ca"/><rect x="10" y="4.5" width="4" height="3.5" rx=".6" fill="#cdc9bd"/><path d="M10 12h4"/></svg>',
+    kit:'<svg viewBox="0 0 24 24" fill="none" stroke="#8a887f" stroke-width="1.4"><rect x="4" y="8" width="16" height="12" rx="1.6" fill="#ded8ca"/><path d="M4 12h16M12 8v12"/><path d="M9 8c0-2 1-3 3-3s3 1 3 3"/></svg>'
+  };
+  const CATLABEL={diffuser:'Diffuser',oil:'Aroma Oil',kit:'Kit / Set'};
+
+  let P=[], filterCat='all', q='', loaded=false;
+  const cardsEl=document.getElementById('cards');
+
+  async function loadProducts(){
+    try{
+      const r=await fetch('/api/products');
+      const j=await r.json();
+      if(!j.ok) throw new Error(j.error||'load failed');
+      P=j.products.map(p=>({...p, qty:0, catText:p.catText||CATLABEL[p.cat]}));
+      loaded=true; render();
+    }catch(e){
+      cardsEl.innerHTML='<div class="state">Not connected to Lark yet.<br>Once the app is <b>approved</b> and the connector is <b>deployed with your App Secret</b>, your live products &amp; stock appear here.<br><br><small>('+(''+ (e.message||e)).replace(/</g,'')+')</small></div>';
+    }
+  }
+
+  function visible(){
+    return P.filter(p=>(filterCat==='all'||p.cat===filterCat) && p.name.toLowerCase().includes(q));
+  }
+  function render(){
+    if(!loaded)return;
+    const list=visible();
+    if(!list.length){cardsEl.innerHTML='<div class="empty">No matching units.</div>';return;}
+    cardsEl.innerHTML=list.map(p=>{
+      const left=p.stock-p.qty;
+      const lowStock=p.stock<=0;
+      const thumb=p.image
+        ? `<img src="${p.image}" alt="" loading="lazy" onerror="this.replaceWith(document.createRange().createContextualFragment(\`${ICONS[p.cat].replace(/`/g,'')}\`))">`
+        : ICONS[p.cat];
+      return `<div class="card ${p.qty>0?'sel':''}" data-id="${p.id}">
+        <div class="thumb">
+          <span class="badge">${CATLABEL[p.cat]}</span>
+          <span class="stockpill ${lowStock?'low':''}">Stock ${p.stock}</span>
+          ${thumb}
+        </div>
+        <div class="cbody">
+          <div class="pname">${p.name}</div>
+          <div class="stepper">
+            <div class="stepbtns">
+              <button data-act="minus" ${p.qty<=0?'disabled':''}>&minus;</button>
+              <span class="qty ${p.qty===0?'zero':''}">${p.qty}</span>
+              <button data-act="plus" ${left<=0?'disabled':''}>+</button>
+            </div>
+            <div class="leftnote">Left: <b>${left}</b></div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  cardsEl.addEventListener('click',e=>{
+    const btn=e.target.closest('button'); if(!btn)return;
+    const id=e.target.closest('.card').dataset.id;
+    const p=P.find(x=>x.id===id); if(!p)return;
+    if(btn.dataset.act==='plus' && p.qty<p.stock) p.qty++;
+    if(btn.dataset.act==='minus' && p.qty>0) p.qty--;
+    render(); updateBar();
+  });
+  document.getElementById('tabs').addEventListener('click',e=>{
+    const t=e.target.closest('.tab'); if(!t)return;
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active'); filterCat=t.dataset.cat; render();
+  });
+  document.getElementById('search').addEventListener('input',e=>{q=e.target.value.toLowerCase();render();});
+
+  function updateBar(){
+    const sel=P.filter(p=>p.qty>0);
+    const units=sel.reduce((s,p)=>s+p.qty,0);
+    document.getElementById('totalUnits').textContent=units;
+    document.getElementById('totalItems').textContent=sel.length;
+    document.getElementById('createBtn').disabled=units===0;
+  }
+
+  const overlay=document.getElementById('overlay');
+  function showSuccess(talent,d,t,sel,units){
+    document.getElementById('mIcon').className='check';
+    document.getElementById('mIcon').innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="#4b7d5b" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+    document.getElementById('mTitle').textContent=`Shoot for ${talent} — created`;
+    document.getElementById('mSub').textContent='Done automatically in Lark:';
+    document.getElementById('mFlow').style.display='';
+    document.getElementById('mCal').textContent=(d||'(date)')+(t?' · '+t:'')+' — with all the details';
+    document.getElementById('mStock').textContent=`Deducted ${units} units (${sel.map(p=>p.name.replace(' Aroma Oil','')+' ×'+p.qty).join(', ')})`;
+    overlay.classList.add('on');
+  }
+  function showError(msg){
+    document.getElementById('mIcon').className='check err';
+    document.getElementById('mIcon').innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="#b06a4a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v5M12 16.5v.5"/><circle cx="12" cy="12" r="9"/></svg>';
+    document.getElementById('mTitle').textContent='Could not create the shoot';
+    document.getElementById('mSub').textContent=msg;
+    document.getElementById('mFlow').style.display='none';
+    overlay.classList.add('on');
+  }
+
+  const createBtn=document.getElementById('createBtn');
+  createBtn.addEventListener('click',async ()=>{
+    const sel=P.filter(p=>p.qty>0);
+    const units=sel.reduce((s,p)=>s+p.qty,0);
+    const talent=document.getElementById('talent').value||'(no name)';
+    const address=document.getElementById('addr').value;
+    const date=document.getElementById('sdate').value, time=document.getElementById('stime').value;
+    createBtn.disabled=true; createBtn.textContent='Creating…';
+    try{
+      const r=await fetch('/api/shoots',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({talent,address,date,time,items:sel.map(p=>({id:p.id,qty:p.qty}))})
+      });
+      const j=await r.json();
+      if(!j.ok) throw new Error(j.error||'failed');
+      showSuccess(talent,date,time,sel,units);
+      P.forEach(p=>p.qty=0); render(); updateBar();
+      loadProducts(); // refresh live stock
+    }catch(e){
+      showError(String(e.message||e));
+    }finally{
+      createBtn.textContent='Create PR Shoot →'; updateBar();
+    }
+  });
+  document.getElementById('closeM').addEventListener('click',()=>overlay.classList.remove('on'));
+  overlay.addEventListener('click',e=>{if(e.target.id==='overlay')e.target.classList.remove('on');});
+
+  loadProducts(); updateBar();
+</script>
+</body>
+</html>

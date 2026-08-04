@@ -1,0 +1,207 @@
+// hiessence PR Shoot — connector (backend), zero dependencies (Node 18+).
+// Holds the Lark app credentials server-side, talks to the Lark Base API.
+// The website (public/index.html) calls THIS server, never Lark directly.
+//
+// Required environment variables (set these in your host, NOT in code):
+//   LARK_APP_ID       = cli_aafb1732ff38de18
+//   LARK_APP_SECRET   = <your app secret>   <-- keep this private
+// Optional (already defaulted to the hiessence base):
+//   LARK_DOMAIN, WIKI_TOKEN, TABLE_PRODUCTS, TABLE_PRSHOOTS, TABLE_SHOOTITEMS
+
+import http from "http";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const CFG = {
+  domain: process.env.LARK_DOMAIN || "https://open.larksuite.com",
+  appId: process.env.LARK_APP_ID || "cli_aafb1732ff38de18",
+  appSecret: process.env.LARK_APP_SECRET || "",
+  wikiToken: process.env.WIKI_TOKEN || "QouawhoyBi1LlJkNunRjkBtEpMe",
+  tblProducts: process.env.TABLE_PRODUCTS || "tblUtz2SKZNW85HD",
+  tblShoots: process.env.TABLE_PRSHOOTS || "tblkBmCmFu77v0iE",
+  tblItems: process.env.TABLE_SHOOTITEMS || "tblQDe19HojFjVCR",
+};
+
+// ---- Lark API helpers -------------------------------------------------------
+
+let _token = { value: null, exp: 0 };
+async function tenantToken() {
+  const now = Date.now();
+  if (_token.value && now < _token.exp - 60_000) return _token.value;
+  const r = await fetch(`${CFG.domain}/open-apis/auth/v3/tenant_access_token/internal`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ app_id: CFG.appId, app_secret: CFG.appSecret }),
+  });
+  const j = await r.json();
+  if (j.code !== 0) throw new Error(`tenant_access_token failed: ${j.code} ${j.msg}`);
+  _token = { value: j.tenant_access_token, exp: now + j.expire * 1000 };
+  return _token.value;
+}
+async function larkGet(url) {
+  const t = await tenantToken();
+  const r = await fetch(url, { headers: { Authorization: `Bearer ${t}` } });
+  return r.json();
+}
+async function larkPost(url, body) {
+  const t = await tenantToken();
+  const r = await fetch(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return r.json();
+}
+
+// Base lives inside a Lark Wiki, so resolve the wiki node -> base app_token.
+let _appToken = null;
+async function baseAppToken() {
+  if (_appToken) return _appToken;
+  const j = await larkGet(
+    `${CFG.domain}/open-apis/wiki/v2/spaces/get_node?token=${CFG.wikiToken}&obj_type=wiki`
+  );
+  if (j.code !== 0) throw new Error(`wiki get_node failed: ${j.code} ${j.msg}`);
+  _appToken = j.data.node.obj_token;
+  return _appToken;
+}
+const recUrl = (appToken, tableId, suffix = "") =>
+  `${CFG.domain}/open-apis/bitable/v1/apps/${appToken}/tables/${tableId}/records${suffix}`;
+
+// ---- Field readers (tolerant of Lark's value shapes) ------------------------
+
+function readText(v) {
+  if (v == null) return "";
+  if (typeof v === "string" || typeof v === "number") return String(v);
+  if (Array.isArray(v)) return v.map((x) => x?.text ?? x?.name ?? "").join("");
+  if (typeof v === "object") return v.text ?? v.name ?? "";
+  return "";
+}
+function readNumber(v) {
+  const n = typeof v === "object" && v && v.value != null ? v.value : v;
+  const num = Number(Array.isArray(n) ? n[0] : n);
+  return Number.isFinite(num) ? num : 0;
+}
+function readAttachmentToken(v) {
+  if (Array.isArray(v) && v.length && v[0] && v[0].file_token) return v[0].file_token;
+  return null;
+}
+const CAT_MAP = { Diffuser: "diffuser", "Aroma Oil": "oil", "Kit / Set": "kit", Kit: "kit" };
+
+// ---- API handlers -----------------------------------------------------------
+
+async function getProducts() {
+  const appToken = await baseAppToken();
+  const items = [];
+  let pageToken = "";
+  do {
+    const suffix = `?page_size=100${pageToken ? `&page_token=${pageToken}` : ""}`;
+    const j = await larkGet(recUrl(appToken, CFG.tblProducts, suffix));
+    if (j.code !== 0) throw new Error(`list products failed: ${j.code} ${j.msg}`);
+    for (const rec of j.data.items || []) {
+      const f = rec.fields || {};
+      const catText = readText(f["Category"]);
+      const imgToken = readAttachmentToken(f["Image"]);
+      items.push({
+        id: rec.record_id,
+        name: readText(f["Product Name"]),
+        cat: CAT_MAP[catText] || "diffuser",
+        catText,
+        stock: readNumber(f["Current Stock"]),
+        image: imgToken ? `/api/image/${imgToken}` : null,
+      });
+    }
+    pageToken = j.data.has_more ? j.data.page_token : "";
+  } while (pageToken);
+  return items;
+}
+
+async function createShoot(body) {
+  const { talent, address, date, time, items } = body || {};
+  if (!Array.isArray(items) || items.length === 0) {
+    const err = new Error("No units selected.");
+    err.status = 400;
+    throw err;
+  }
+  const appToken = await baseAppToken();
+  const shootFields = {
+    "Talent Name": talent || "(no name)",
+    "Address": address || "",
+    "Status": "Scheduled",
+  };
+  if (date) shootFields["Shoot Date"] = new Date(`${date}T00:00:00`).getTime();
+  if (time) shootFields["Shoot Time"] = time;
+
+  const shootRes = await larkPost(recUrl(appToken, CFG.tblShoots), { fields: shootFields });
+  if (shootRes.code !== 0) throw new Error(`create shoot failed: ${shootRes.code} ${shootRes.msg}`);
+  const shootId = shootRes.data.record.record_id;
+
+  const created = [];
+  for (const it of items) {
+    const itemRes = await larkPost(recUrl(appToken, CFG.tblItems), {
+      fields: { "Product": [it.id], "Quantity": Number(it.qty) || 0, "Shoot": [shootId] },
+    });
+    if (itemRes.code !== 0) throw new Error(`create item failed: ${itemRes.code} ${itemRes.msg}`);
+    created.push(itemRes.data.record.record_id);
+  }
+  return { shootId, items: created };
+}
+
+// ---- HTTP plumbing ----------------------------------------------------------
+
+function serveIndex(res) {
+  fs.readFile(path.join(__dirname, "index.html"), (err, data) => {
+    if (err) { res.writeHead(500); return res.end("index.html missing"); }
+    res.writeHead(200, { "Content-Type": "text/html" });
+    res.end(data);
+  });
+}
+
+function sendJson(res, code, obj) {
+  const s = JSON.stringify(obj);
+  res.writeHead(code, { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(s) });
+  res.end(s);
+}
+function readBody(req) {
+  return new Promise((resolve) => {
+    let d = "";
+    req.on("data", (c) => (d += c));
+    req.on("end", () => { try { resolve(d ? JSON.parse(d) : {}); } catch { resolve({}); } });
+  });
+}
+const server = http.createServer(async (req, res) => {
+  const url = req.url.split("?")[0];
+  try {
+    if (url === "/api/health") {
+      return sendJson(res, 200, { ok: true, appIdSet: !!CFG.appId, secretSet: !!CFG.appSecret, domain: CFG.domain });
+    }
+    if (url === "/api/products" && req.method === "GET") {
+      const products = await getProducts();
+      return sendJson(res, 200, { ok: true, products });
+    }
+    if (url.startsWith("/api/image/") && req.method === "GET") {
+      const token = url.slice("/api/image/".length);
+      const t = await tenantToken();
+      const r = await fetch(`${CFG.domain}/open-apis/drive/v1/medias/${token}/download`, {
+        headers: { Authorization: `Bearer ${t}` },
+      });
+      if (!r.ok) { res.writeHead(502); return res.end(); }
+      res.writeHead(200, { "Content-Type": r.headers.get("content-type") || "image/jpeg", "Cache-Control": "public, max-age=86400" });
+      return res.end(Buffer.from(await r.arrayBuffer()));
+    }
+    if (url === "/api/shoots" && req.method === "POST") {
+      const body = await readBody(req);
+      const out = await createShoot(body);
+      return sendJson(res, 200, { ok: true, ...out });
+    }
+    if (url.startsWith("/api/")) return sendJson(res, 404, { ok: false, error: "Not found" });
+    return serveIndex(res);
+  } catch (e) {
+    sendJson(res, e.status || 500, { ok: false, error: String(e.message || e) });
+  }
+});
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => console.log(`hiessence connector running on :${PORT}`));
