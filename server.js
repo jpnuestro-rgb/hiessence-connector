@@ -41,20 +41,36 @@ async function tenantToken() {
   _token = { value: j.tenant_access_token, exp: now + j.expire * 1000 };
   return _token.value;
 }
-async function larkGet(url) {
-  const t = await tenantToken();
-  const r = await fetch(url, { headers: { Authorization: `Bearer ${t}` } });
-  return r.json();
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Lark codes worth retrying (rate limit / transient server "Fail" conditions)
+const TRANSIENT = new Set([1254002, 1254607, 1254291, 99991400, 99991661, 99991663, 99991665]);
+
+async function larkFetch(url, init) {
+  let last;
+  for (let i = 0; i < 4; i++) {
+    try {
+      const t = await tenantToken();
+      const r = await fetch(url, {
+        ...init,
+        headers: { Authorization: `Bearer ${t}`, ...(init && init.headers) },
+      });
+      const j = await r.json();
+      if (j.code && TRANSIENT.has(j.code)) {
+        last = new Error(`lark ${j.code} ${j.msg}`);
+        await sleep(600 * (i + 1));
+        continue;
+      }
+      return j;
+    } catch (e) {
+      last = e;
+      await sleep(600 * (i + 1));
+    }
+  }
+  throw last;
 }
-async function larkPost(url, body) {
-  const t = await tenantToken();
-  const r = await fetch(url, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  return r.json();
-}
+const larkGet = (url) => larkFetch(url);
+const larkPost = (url, body) =>
+  larkFetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 
 // Base lives inside a Lark Wiki, so resolve the wiki node -> base app_token.
 let _appToken = null;
@@ -171,6 +187,8 @@ function readBody(req) {
     req.on("end", () => { try { resolve(d ? JSON.parse(d) : {}); } catch { resolve({}); } });
   });
 }
+let _prodCache = { t: 0, data: null };
+
 const server = http.createServer(async (req, res) => {
   const url = req.url.split("?")[0];
   try {
@@ -178,8 +196,11 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true, appIdSet: !!CFG.appId, secretSet: !!CFG.appSecret, domain: CFG.domain });
     }
     if (url === "/api/products" && req.method === "GET") {
-      const products = await getProducts();
-      return sendJson(res, 200, { ok: true, products });
+      const now = Date.now();
+      if (!_prodCache.data || now - _prodCache.t > 30_000) {
+        _prodCache = { t: now, data: await getProducts() };
+      }
+      return sendJson(res, 200, { ok: true, products: _prodCache.data });
     }
     if (url.startsWith("/api/image/") && req.method === "GET") {
       const token = url.slice("/api/image/".length);
@@ -199,6 +220,7 @@ const server = http.createServer(async (req, res) => {
     if (url.startsWith("/api/")) return sendJson(res, 404, { ok: false, error: "Not found" });
     return serveIndex(res);
   } catch (e) {
+    console.error("API error:", (e && e.stack) || e);
     sendJson(res, e.status || 500, { ok: false, error: String(e.message || e) });
   }
 });
