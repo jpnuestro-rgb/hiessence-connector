@@ -147,6 +147,17 @@ async function getProducts() {
   return items;
 }
 
+// Convert a 24-hour "HH:MM" time (from the website input) to "H:MM AM/PM".
+function to12Hour(t) {
+  const m = /^(\d{1,2}):(\d{2})/.exec(String(t || ""));
+  if (!m) return String(t || "");
+  let h = Number(m[1]);
+  const min = m[2];
+  const ap = h < 12 ? "AM" : "PM";
+  h = h % 12 === 0 ? 12 : h % 12;
+  return `${h}:${min} ${ap}`;
+}
+
 async function createShoot(body) {
   const { talent, address, date, time, videoEditor, contentStrat, items } = body || {};
   if (!Array.isArray(items) || items.length === 0) {
@@ -161,7 +172,7 @@ async function createShoot(body) {
     "Status": "Scheduled",
   };
   if (date) shootFields["Shoot Date"] = new Date(`${date}T00:00:00`).getTime();
-  if (time) shootFields["Shoot Time"] = time;
+  if (time) shootFields["Shoot Time"] = to12Hour(time);
   if (videoEditor) shootFields["Videographer/Editor"] = videoEditor;
   if (contentStrat) shootFields["Content Strategy Associate"] = contentStrat;
 
