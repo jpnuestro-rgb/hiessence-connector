@@ -646,6 +646,32 @@ const server = http.createServer(async (req, res) => {
     if (url === "/api/health") {
       return sendJson(res, 200, { ok: true, appIdSet: !!CFG.appId, secretSet: !!CFG.appSecret, domain: CFG.domain });
     }
+    if (url === "/api/debug/cal") {
+      const out = {};
+      try {
+        const listResp = await larkGet(`${CFG.domain}/open-apis/calendar/v4/calendars?page_size=500`);
+        out.listCode = listResp.code;
+        out.listMsg = listResp.msg;
+        out.listKeys = listResp.data ? Object.keys(listResp.data) : null;
+        out.listSample = listResp.data ? (listResp.data.calendar_list || listResp.data.items || []).map((c) => ({ id: c.calendar_id, summary: c.summary })) : null;
+      } catch (e) { out.listErr = String(e && e.message || e); }
+      try {
+        const createResp = await larkPost(`${CFG.domain}/open-apis/calendar/v4/calendars`, {
+          summary: SHOOT_CAL_NAME, description: "PR shoot schedule (debug)", permissions: "public",
+        });
+        out.createCalCode = createResp.code;
+        out.createCalMsg = createResp.msg;
+        out.createCalId = createResp.data && createResp.data.calendar ? createResp.data.calendar.calendar_id : null;
+        if (out.createCalId) {
+          const evResp = await larkPost(`${CFG.domain}/open-apis/calendar/v4/calendars/${out.createCalId}/events`,
+            eventBody({ dateMs: 1787788800000, timeText: "2:00 PM", talent: "DEBUG EVENT", address: "x", unitsText: "" }));
+          out.evCode = evResp.code;
+          out.evMsg = evResp.msg;
+          out.evId = evResp.data && evResp.data.event ? evResp.data.event.event_id : null;
+        }
+      } catch (e) { out.createErr = String(e && e.message || e); }
+      return sendJson(res, 200, out);
+    }
     if (url === "/api/products" && req.method === "GET") {
       const products = await getProducts();
       return sendJson(res, 200, { ok: true, products });
