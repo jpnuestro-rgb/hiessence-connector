@@ -231,7 +231,7 @@ function rescheduleCard(f) {
     msg_type: "interactive",
     card: {
       config: { wide_screen_mode: true },
-      header: { template: "green", title: { tag: "plain_text", content: "PR Shoot Rescheduled" } },
+      header: { template: "yellow", title: { tag: "plain_text", content: "PR Shoot Rescheduled" } },
       elements: [
         { tag: "div", text: { tag: "lark_md", content: lines.join("\n") } },
         { tag: "hr" },
@@ -672,29 +672,6 @@ const server = http.createServer(async (req, res) => {
   try {
     if (url === "/api/health") {
       return sendJson(res, 200, { ok: true, appIdSet: !!CFG.appId, secretSet: !!CFG.appSecret, domain: CFG.domain });
-    }
-    if (url === "/api/debug/cleanup") {
-      const out = { deleted: [] };
-      try {
-        const calId = await ensureShootCalendar();
-        out.calId = calId;
-        // Tidy the calendar description (drop the earlier "(debug)" note).
-        const patch = await larkPatch(`${CFG.domain}/open-apis/calendar/v4/calendars/${calId}`, {
-          description: "PR shoot schedule, synced automatically from the hiessence website.",
-        });
-        out.patchCode = patch.code;
-        // Remove any leftover "DEBUG EVENT" placeholder events.
-        const ev = await larkGet(`${CFG.domain}/open-apis/calendar/v4/calendars/${calId}/events?page_size=500`);
-        out.evListCode = ev.code;
-        const items = (ev.data && ev.data.items) || [];
-        for (const e of items) {
-          if ((e.summary || "") === "DEBUG EVENT") {
-            await larkDelete(`${CFG.domain}/open-apis/calendar/v4/calendars/${calId}/events/${e.event_id}`);
-            out.deleted.push(e.event_id);
-          }
-        }
-      } catch (e) { out.err = String(e && e.message || e); }
-      return sendJson(res, 200, out);
     }
     if (url === "/api/products" && req.method === "GET") {
       const products = await getProducts();
