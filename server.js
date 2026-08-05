@@ -76,6 +76,8 @@ const larkPost = (url, body) =>
   larkFetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 const larkPut = (url, body) =>
   larkFetch(url, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+const larkPatch = (url, body) =>
+  larkFetch(url, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 const larkDelete = (url) => larkFetch(url, { method: "DELETE" });
 
 // Pull every "rec..." id out of a link field's value (shape varies by API version).
@@ -212,6 +214,111 @@ function rescheduleText(f) {
   return lines.join("\n");
 }
 
+// ---- Lark Calendar sync -----------------------------------------------------
+// Shoots are mirrored onto an app-owned shared calendar so the Lark Calendar
+// stays in sync: an event is created on booking, moved on reschedule/edit, and
+// removed on delete. The event id is stored on the shoot record.
+
+const SHOOT_CAL_NAME = "hiessence PR Shoots";
+let _calId = null;
+
+// Find (or create) the shared PR-shoots calendar; cache its id in memory.
+async function ensureShootCalendar() {
+  if (_calId) return _calId;
+  try {
+    const j = await larkGet(`${CFG.domain}/open-apis/calendar/v4/calendars?page_size=500`);
+    if (j.code === 0 && j.data) {
+      const list = j.data.calendar_list || j.data.items || [];
+      const found = list.find((c) => (c.summary || "") === SHOOT_CAL_NAME);
+      if (found) { _calId = found.calendar_id; return _calId; }
+    }
+  } catch (_) { /* fall through to create */ }
+  const c = await larkPost(`${CFG.domain}/open-apis/calendar/v4/calendars`, {
+    summary: SHOOT_CAL_NAME,
+    description: "PR shoot schedule, synced automatically from the hiessence website.",
+    permissions: "public",
+    color: -14513409,
+  });
+  if (c.code !== 0) throw new Error(`create calendar failed: ${c.code} ${c.msg}`);
+  _calId = c.data.calendar.calendar_id;
+  return _calId;
+}
+
+// Build Lark event start/end from a Shoot Date (epoch ms) + a "H:MM AM/PM" text.
+// With a time -> a 1-hour timed event; without -> an all-day event. Manila time.
+function eventTimes(dateMs, timeText) {
+  const d = new Date(Number(dateMs) + 8 * 3600 * 1000);
+  const Y = d.getUTCFullYear(), M = d.getUTCMonth(), D = d.getUTCDate();
+  const m = /^(\d{1,2}):(\d{2})\s*(AM|PM)?/i.exec(String(timeText || ""));
+  if (!m) {
+    const ds = `${Y}-${String(M + 1).padStart(2, "0")}-${String(D).padStart(2, "0")}`;
+    return { start_time: { date: ds, timezone: "Asia/Manila" }, end_time: { date: ds, timezone: "Asia/Manila" } };
+  }
+  let hh = Number(m[1]); const mm = Number(m[2]); const ap = (m[3] || "").toUpperCase();
+  if (ap === "PM" && hh < 12) hh += 12;
+  if (ap === "AM" && hh === 12) hh = 0;
+  const startSec = Math.floor(Date.UTC(Y, M, D, hh, mm) / 1000) - 8 * 3600;
+  return {
+    start_time: { timestamp: String(startSec), timezone: "Asia/Manila" },
+    end_time: { timestamp: String(startSec + 3600), timezone: "Asia/Manila" },
+  };
+}
+
+function eventBody({ dateMs, timeText, talent, address, unitsText }) {
+  const t = eventTimes(dateMs, timeText);
+  const body = { summary: talent || "PR Shoot", start_time: t.start_time, end_time: t.end_time };
+  body.description = unitsText ? `Units to bring:\n${unitsText}` : "";
+  if (address) body.location = { name: address };
+  return body;
+}
+
+// Create a calendar event for a shoot; returns the event id (or null on failure).
+async function createShootEvent(info) {
+  try {
+    const calId = await ensureShootCalendar();
+    const r = await larkPost(`${CFG.domain}/open-apis/calendar/v4/calendars/${calId}/events`, eventBody(info));
+    if (r.code === 0 && r.data && r.data.event) return r.data.event.event_id;
+  } catch (_) { /* non-fatal */ }
+  return null;
+}
+
+// Move/update an existing shoot event (non-fatal on any error).
+async function updateShootEvent(eventId, info) {
+  if (!eventId) return;
+  try {
+    const calId = await ensureShootCalendar();
+    await larkPatch(`${CFG.domain}/open-apis/calendar/v4/calendars/${calId}/events/${eventId}`, eventBody(info));
+  } catch (_) { /* non-fatal */ }
+}
+
+// Remove a shoot event (non-fatal on any error).
+async function deleteShootEvent(eventId) {
+  if (!eventId) return;
+  try {
+    const calId = await ensureShootCalendar();
+    await larkDelete(`${CFG.domain}/open-apis/calendar/v4/calendars/${calId}/events/${eventId}`);
+  } catch (_) { /* non-fatal */ }
+}
+
+// Make sure the shoots table has a "Calendar Event ID" text field to store event ids.
+let _eventFieldReady = false;
+async function ensureEventIdField() {
+  if (_eventFieldReady) return;
+  try {
+    const appToken = await baseAppToken();
+    const j = await larkGet(`${CFG.domain}/open-apis/bitable/v1/apps/${appToken}/tables/${CFG.tblShoots}/fields?page_size=200`);
+    if (j.code === 0 && j.data) {
+      const exists = (j.data.items || []).some((f) => f.field_name === "Calendar Event ID");
+      if (!exists) {
+        await larkPost(`${CFG.domain}/open-apis/bitable/v1/apps/${appToken}/tables/${CFG.tblShoots}/fields`, {
+          field_name: "Calendar Event ID", type: 1,
+        });
+      }
+      _eventFieldReady = true;
+    }
+  } catch (_) { /* non-fatal: event-id storage is best-effort */ }
+}
+
 // Read a Lark date field (stored as epoch ms) into a number, or null.
 function readDateMs(v) {
   if (v == null) return null;
@@ -305,6 +412,20 @@ async function createShoot(body) {
     if (itemRes.code !== 0) throw new Error(`create item failed: ${itemRes.code} ${itemRes.msg}`);
     created.push(itemRes.data.record.record_id);
   }
+
+  // Mirror the shoot onto the shared Lark Calendar and remember the event id.
+  await ensureEventIdField();
+  const eventId = await createShootEvent({
+    dateMs: shootFields["Shoot Date"],
+    timeText: shootFields["Shoot Time"],
+    talent: shootFields["Talent Name"],
+    address: shootFields["Address"],
+    unitsText: shootFields["Units Text"] || "",
+  });
+  if (eventId) {
+    await larkPut(recUrl(appToken, CFG.tblShoots, `/${shootId}`), { fields: { "Calendar Event ID": eventId } });
+  }
+
   return { shootId, items: created };
 }
 
@@ -349,7 +470,7 @@ async function updateShoot(body) {
   if (date) fields["Shoot Date"] = newMs;
   const res = await larkPut(recUrl(appToken, CFG.tblShoots, `/${id}`), { fields });
   if (res.code !== 0) throw new Error(`update shoot failed: ${res.code} ${res.msg}`);
-  // Only notify when the date actually moved.
+  // Only notify + move the calendar event when the date actually moved.
   if (old && newMs && newMs !== oldMs) {
     await postWebhookText(rescheduleText({
       talent: readText(old["Talent Name"]),
@@ -360,6 +481,13 @@ async function updateShoot(body) {
       contentStrat: readText(old["Content Strategy Associate"]),
       unitsText: readText(old["Units Text"]),
     }));
+    await updateShootEvent(readText(old["Calendar Event ID"]), {
+      dateMs: newMs,
+      timeText: readText(old["Shoot Time"]),
+      talent: readText(old["Talent Name"]),
+      address: readText(old["Address"]),
+      unitsText: readText(old["Units Text"]),
+    });
   }
   return { id };
 }
@@ -371,10 +499,13 @@ async function deleteShoot(body) {
   const appToken = await baseAppToken();
   const g = await larkGet(recUrl(appToken, CFG.tblShoots, `/${id}`));
   if (g.code === 0 && g.data && g.data.record) {
-    const itemIds = extractRecordIds(g.data.record.fields["Units to Bring"]);
+    const f = g.data.record.fields || {};
+    const itemIds = extractRecordIds(f["Units to Bring"]);
     for (const iid of itemIds) {
       await larkDelete(recUrl(appToken, CFG.tblItems, `/${iid}`));
     }
+    // Remove the mirrored calendar event, if any.
+    await deleteShootEvent(readText(f["Calendar Event ID"]));
   }
   const res = await larkDelete(recUrl(appToken, CFG.tblShoots, `/${id}`));
   if (res.code !== 0) throw new Error(`delete shoot failed: ${res.code} ${res.msg}`);
@@ -419,12 +550,16 @@ async function editShoot(body) {
   // remove the old shoot items, then update the shoot, then create the new items
   const g = await larkGet(recUrl(appToken, CFG.tblShoots, `/${id}`));
   let dateOrTimeChanged = false;
+  let eventId = "";
+  let oldDateMs = null;
+  let oldTimeText = "";
   if (g.code === 0 && g.data && g.data.record) {
     const oldF = g.data.record.fields || {};
-    const oldMs = readDateMs(oldF["Shoot Date"]);
-    const oldTime = readText(oldF["Shoot Time"]);
-    if (date && fields["Shoot Date"] !== oldMs) dateOrTimeChanged = true;
-    if (time && fields["Shoot Time"] !== oldTime) dateOrTimeChanged = true;
+    oldDateMs = readDateMs(oldF["Shoot Date"]);
+    oldTimeText = readText(oldF["Shoot Time"]);
+    eventId = readText(oldF["Calendar Event ID"]);
+    if (date && fields["Shoot Date"] !== oldDateMs) dateOrTimeChanged = true;
+    if (time && fields["Shoot Time"] !== oldTimeText) dateOrTimeChanged = true;
     for (const iid of extractRecordIds(oldF["Units to Bring"])) {
       await larkDelete(recUrl(appToken, CFG.tblItems, `/${iid}`));
     }
@@ -448,6 +583,16 @@ async function editShoot(body) {
       contentStrat: contentStrat || "",
       unitsText: fields["Units Text"] || "",
     }));
+  }
+  // Keep the Lark Calendar event in sync with the edited details.
+  if (eventId) {
+    await updateShootEvent(eventId, {
+      dateMs: fields["Shoot Date"] || oldDateMs,
+      timeText: fields["Shoot Time"] || oldTimeText,
+      talent: talent || "(no name)",
+      address: address || "",
+      unitsText: fields["Units Text"] || "",
+    });
   }
   return { id };
 }
