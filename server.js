@@ -201,17 +201,44 @@ async function postWebhookText(text) {
   }
 }
 
-// Build the "Rescheduled" group-chat message with the same details as a new booking.
-function rescheduleText(f) {
-  const lines = ["PR Shoot Rescheduled", ""];
-  if (f.talent) lines.push(`Talent: ${f.talent}`);
-  if (f.dateText) lines.push(`Date: ${f.dateText}`);
-  if (f.timeText) lines.push(`Time: ${f.timeText}`);
-  if (f.address) lines.push(`Address: ${f.address}`);
-  if (f.videoEditor) lines.push(`Videographer/Editor: ${f.videoEditor}`);
-  if (f.contentStrat) lines.push(`Content Strategy Associate: ${f.contentStrat}`);
-  if (f.unitsText) lines.push(`Units to bring:\n${f.unitsText}`);
-  return lines.join("\n");
+// Post any payload (e.g. an interactive card) to the group chat webhook.
+async function postWebhook(payload) {
+  if (!CFG.webhook || !payload) return { skipped: true };
+  try {
+    const r = await fetch(CFG.webhook, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    try { return await r.json(); } catch { return { status: r.status }; }
+  } catch (e) {
+    return { error: String(e && e.message || e) };
+  }
+}
+
+// Build the "Rescheduled" message as an interactive card, matching the layout of
+// the "New PR Shoot Scheduled" card (header + fields), so both look consistent.
+function rescheduleCard(f) {
+  const lines = ["**This PR Shoot has been rescheduled.**"];
+  lines.push(`Videographer/Editor: ${f.videoEditor || ""}`);
+  lines.push(`Content Strategy Associate: ${f.contentStrat || ""}`);
+  lines.push(`Talent: ${f.talent || ""}`);
+  lines.push(`Date: ${f.dateText || ""}`);
+  lines.push(`Time: ${f.timeText || ""}`);
+  lines.push(`Address: ${f.address || ""}`);
+  lines.push(`Units to bring:${f.unitsText ? "\n" + f.unitsText : ""}`);
+  return {
+    msg_type: "interactive",
+    card: {
+      config: { wide_screen_mode: true },
+      header: { template: "green", title: { tag: "plain_text", content: "PR Shoot Rescheduled" } },
+      elements: [
+        { tag: "div", text: { tag: "lark_md", content: lines.join("\n") } },
+        { tag: "hr" },
+        { tag: "note", elements: [{ tag: "plain_text", content: "From hiessence PR Shoot Inventory" }] },
+      ],
+    },
+  };
 }
 
 // ---- Lark Calendar sync -----------------------------------------------------
@@ -472,7 +499,7 @@ async function updateShoot(body) {
   if (res.code !== 0) throw new Error(`update shoot failed: ${res.code} ${res.msg}`);
   // Only notify + move the calendar event when the date actually moved.
   if (old && newMs && newMs !== oldMs) {
-    await postWebhookText(rescheduleText({
+    await postWebhook(rescheduleCard({
       talent: readText(old["Talent Name"]),
       dateText: fmtDateMs(newMs),
       timeText: readText(old["Shoot Time"]),
@@ -574,7 +601,7 @@ async function editShoot(body) {
   }
   // Notify the group chat only when the schedule (date or time) actually moved.
   if (dateOrTimeChanged) {
-    await postWebhookText(rescheduleText({
+    await postWebhook(rescheduleCard({
       talent: talent || "(no name)",
       dateText: fields["Shoot Date"] ? fmtDateMs(fields["Shoot Date"]) : "",
       timeText: fields["Shoot Time"] || "",
@@ -646,30 +673,27 @@ const server = http.createServer(async (req, res) => {
     if (url === "/api/health") {
       return sendJson(res, 200, { ok: true, appIdSet: !!CFG.appId, secretSet: !!CFG.appSecret, domain: CFG.domain });
     }
-    if (url === "/api/debug/cal") {
-      const out = {};
+    if (url === "/api/debug/cleanup") {
+      const out = { deleted: [] };
       try {
-        const listResp = await larkGet(`${CFG.domain}/open-apis/calendar/v4/calendars?page_size=500`);
-        out.listCode = listResp.code;
-        out.listMsg = listResp.msg;
-        out.listKeys = listResp.data ? Object.keys(listResp.data) : null;
-        out.listSample = listResp.data ? (listResp.data.calendar_list || listResp.data.items || []).map((c) => ({ id: c.calendar_id, summary: c.summary })) : null;
-      } catch (e) { out.listErr = String(e && e.message || e); }
-      try {
-        const createResp = await larkPost(`${CFG.domain}/open-apis/calendar/v4/calendars`, {
-          summary: SHOOT_CAL_NAME, description: "PR shoot schedule (debug)", permissions: "public",
+        const calId = await ensureShootCalendar();
+        out.calId = calId;
+        // Tidy the calendar description (drop the earlier "(debug)" note).
+        const patch = await larkPatch(`${CFG.domain}/open-apis/calendar/v4/calendars/${calId}`, {
+          description: "PR shoot schedule, synced automatically from the hiessence website.",
         });
-        out.createCalCode = createResp.code;
-        out.createCalMsg = createResp.msg;
-        out.createCalId = createResp.data && createResp.data.calendar ? createResp.data.calendar.calendar_id : null;
-        if (out.createCalId) {
-          const evResp = await larkPost(`${CFG.domain}/open-apis/calendar/v4/calendars/${out.createCalId}/events`,
-            eventBody({ dateMs: 1787788800000, timeText: "2:00 PM", talent: "DEBUG EVENT", address: "x", unitsText: "" }));
-          out.evCode = evResp.code;
-          out.evMsg = evResp.msg;
-          out.evId = evResp.data && evResp.data.event ? evResp.data.event.event_id : null;
+        out.patchCode = patch.code;
+        // Remove any leftover "DEBUG EVENT" placeholder events.
+        const ev = await larkGet(`${CFG.domain}/open-apis/calendar/v4/calendars/${calId}/events?page_size=500`);
+        out.evListCode = ev.code;
+        const items = (ev.data && ev.data.items) || [];
+        for (const e of items) {
+          if ((e.summary || "") === "DEBUG EVENT") {
+            await larkDelete(`${CFG.domain}/open-apis/calendar/v4/calendars/${calId}/events/${e.event_id}`);
+            out.deleted.push(e.event_id);
+          }
         }
-      } catch (e) { out.createErr = String(e && e.message || e); }
+      } catch (e) { out.err = String(e && e.message || e); }
       return sendJson(res, 200, out);
     }
     if (url === "/api/products" && req.method === "GET") {
