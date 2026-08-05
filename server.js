@@ -24,6 +24,8 @@ const CFG = {
   tblShoots: process.env.TABLE_PRSHOOTS || "tblkBmCmFu77v0iE",
   tblItems: process.env.TABLE_SHOOTITEMS || "tblQDe19HojFjVCR",
   tblDeliveries: process.env.TABLE_DELIVERIES || "tblwYjnDfU2p69MZ",
+  // Custom bot webhook for the "Creative Department [Content]" group chat.
+  webhook: process.env.LARK_WEBHOOK_URL || "https://open.larksuite.com/open-apis/bot/v2/hook/3321f7f7-f822-425a-ba8b-0c809e1d2f46",
 };
 
 // ---- Lark API helpers -------------------------------------------------------
@@ -170,6 +172,46 @@ async function getProducts() {
   return items;
 }
 
+// ---- Group-chat notifications (custom bot webhook) --------------------------
+
+// Format an epoch-ms date as "Aug 14, 2026" in Manila time (matches the calendar).
+function fmtDateMs(ms) {
+  if (!ms) return "";
+  const d = new Date(Number(ms) + 8 * 3600 * 1000);
+  const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${MON[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
+}
+
+// Post a plain-text message to the group chat via the custom bot webhook (no auth).
+// Returns the Lark response (or an error string) so callers can surface delivery status.
+async function postWebhookText(text) {
+  if (!CFG.webhook || !text) return { skipped: true };
+  try {
+    const r = await fetch(CFG.webhook, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ msg_type: "text", content: { text } }),
+    });
+    try { return await r.json(); } catch { return { status: r.status }; }
+  } catch (e) {
+    /* non-fatal: a failed notification must never break the reschedule itself */
+    return { error: String(e && e.message || e) };
+  }
+}
+
+// Build the "Rescheduled" group-chat message with the same details as a new booking.
+function rescheduleText(f) {
+  const lines = ["🔁 PR Shoot Rescheduled", ""];
+  if (f.talent) lines.push(`Talent: ${f.talent}`);
+  if (f.dateText) lines.push(`Date: ${f.dateText}`);
+  if (f.timeText) lines.push(`Time: ${f.timeText}`);
+  if (f.address) lines.push(`Address: ${f.address}`);
+  if (f.videoEditor) lines.push(`Videographer/Editor: ${f.videoEditor}`);
+  if (f.contentStrat) lines.push(`Content Strategy Associate: ${f.contentStrat}`);
+  if (f.unitsText) lines.push(`Units to bring:\n${f.unitsText}`);
+  return lines.join("\n");
+}
+
 // Read a Lark date field (stored as epoch ms) into a number, or null.
 function readDateMs(v) {
   if (v == null) return null;
@@ -292,16 +334,35 @@ async function getDeliveries() {
   return items.filter((x) => x.qty > 0).sort((a, b) => (b.date || 0) - (a.date || 0));
 }
 
-// Reschedule a shoot (change its Shoot Date).
+// Reschedule a shoot (change its Shoot Date) — e.g. drag to another day.
 async function updateShoot(body) {
   const { id, date } = body || {};
   if (!id) { const e = new Error("Missing shoot id."); e.status = 400; throw e; }
   const appToken = await baseAppToken();
+  // Read the current record first: for change-detection and for the notif details.
+  let old = null;
+  const g = await larkGet(recUrl(appToken, CFG.tblShoots, `/${id}`));
+  if (g.code === 0 && g.data && g.data.record) old = g.data.record.fields || {};
+  const newMs = date ? new Date(`${date}T00:00:00`).getTime() : null;
+  const oldMs = old ? readDateMs(old["Shoot Date"]) : null;
   const fields = {};
-  if (date) fields["Shoot Date"] = new Date(`${date}T00:00:00`).getTime();
+  if (date) fields["Shoot Date"] = newMs;
   const res = await larkPut(recUrl(appToken, CFG.tblShoots, `/${id}`), { fields });
   if (res.code !== 0) throw new Error(`update shoot failed: ${res.code} ${res.msg}`);
-  return { id };
+  // Only notify when the date actually moved.
+  let notif;
+  if (old && newMs && newMs !== oldMs) {
+    notif = await postWebhookText(rescheduleText({
+      talent: readText(old["Talent Name"]),
+      dateText: fmtDateMs(newMs),
+      timeText: readText(old["Shoot Time"]),
+      address: readText(old["Address"]),
+      videoEditor: readText(old["Videographer/Editor"]),
+      contentStrat: readText(old["Content Strategy Associate"]),
+      unitsText: readText(old["Units Text"]),
+    }));
+  }
+  return { id, notif };
 }
 
 // Delete a shoot AND its linked Shoot Items (so the reserved stock is returned).
@@ -358,8 +419,14 @@ async function editShoot(body) {
   } catch (_) {}
   // remove the old shoot items, then update the shoot, then create the new items
   const g = await larkGet(recUrl(appToken, CFG.tblShoots, `/${id}`));
+  let dateOrTimeChanged = false;
   if (g.code === 0 && g.data && g.data.record) {
-    for (const iid of extractRecordIds(g.data.record.fields["Units to Bring"])) {
+    const oldF = g.data.record.fields || {};
+    const oldMs = readDateMs(oldF["Shoot Date"]);
+    const oldTime = readText(oldF["Shoot Time"]);
+    if (date && fields["Shoot Date"] !== oldMs) dateOrTimeChanged = true;
+    if (time && fields["Shoot Time"] !== oldTime) dateOrTimeChanged = true;
+    for (const iid of extractRecordIds(oldF["Units to Bring"])) {
       await larkDelete(recUrl(appToken, CFG.tblItems, `/${iid}`));
     }
   }
@@ -370,6 +437,18 @@ async function editShoot(body) {
       fields: { "Product": [it.id], "Quantity": Number(it.qty) || 0, "Shoot": [id] },
     });
     if (ir.code !== 0) throw new Error(`create item failed: ${ir.code} ${ir.msg}`);
+  }
+  // Notify the group chat only when the schedule (date or time) actually moved.
+  if (dateOrTimeChanged) {
+    await postWebhookText(rescheduleText({
+      talent: talent || "(no name)",
+      dateText: fields["Shoot Date"] ? fmtDateMs(fields["Shoot Date"]) : "",
+      timeText: fields["Shoot Time"] || "",
+      address: address || "",
+      videoEditor: videoEditor || "",
+      contentStrat: contentStrat || "",
+      unitsText: fields["Units Text"] || "",
+    }));
   }
   return { id };
 }
