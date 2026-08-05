@@ -137,6 +137,12 @@
   .sideshoot .units{margin-top:7px;padding-top:7px;border-top:1px dashed var(--line);font-size:12.5px;color:var(--ink);white-space:pre-line}
   .sidenone{color:var(--muted);font-size:13.5px;margin-bottom:16px}
   .calnote{grid-column:1/-1;text-align:center;color:var(--muted);padding:30px;font-size:13px}
+  .acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px;padding-top:10px;border-top:1px dashed var(--line);align-items:center}
+  .mini{font-size:12px;padding:6px 11px;border-radius:8px;border:1px solid var(--line);background:#fff;cursor:pointer;color:var(--ink);font-family:inherit;font-weight:600}
+  .mini:hover{background:#f1eee4}
+  .mini.del{color:var(--warn);border-color:#e7cdbf}
+  .mini.del[data-act="delyes"]{background:var(--warn);color:#fff;border-color:var(--warn)}
+  .acts .reInp{font-size:12px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;font-family:inherit;background:#fcfbf7}
 
   /* modal */
   .overlay{position:fixed;inset:0;background:rgba(30,29,26,.5);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
@@ -427,10 +433,23 @@
     grid.innerHTML=html;renderSide();}
   function renderSide(){const side=document.getElementById('calSide');if(!calSelKey){side.innerHTML='';return;}
     const list=shootsOn(calSelKey);let html=`<h3>${prettyDay(calSelKey)}</h3>`;
-    html+=list.length?list.map(s=>`<div class="sideshoot"><div class="st">${esc(s.talent||'(no name)')}</div>${s.time?`<div class="row"><span>Time</span><b>${esc(s.time)}</b></div>`:''}${s.address?`<div class="row"><span>Address</span><b>${esc(s.address)}</b></div>`:''}${s.videoEditor?`<div class="row"><span>Video / Editor</span><b>${esc(s.videoEditor)}</b></div>`:''}${s.contentStrat?`<div class="row"><span>Content Strat</span><b>${esc(s.contentStrat)}</b></div>`:''}${s.units?`<div class="units">${esc(s.units)}</div>`:''}</div>`).join(''):'<div class="sidenone">No shoots this day.</div>';
-    html+=`<button class="btn" id="sideNew" style="width:100%">+ New Shoot on ${prettyDay(calSelKey)}</button>`;side.innerHTML=html;
-    document.getElementById('sideNew').addEventListener('click',()=>{go('new');document.getElementById('sdate').value=calSelKey;updateBar();});}
+    html+=list.length?list.map(s=>`<div class="sideshoot" data-id="${s.id}"><div class="st">${esc(s.talent||'(no name)')}</div>${s.time?`<div class="row"><span>Time</span><b>${esc(s.time)}</b></div>`:''}${s.address?`<div class="row"><span>Address</span><b>${esc(s.address)}</b></div>`:''}${s.videoEditor?`<div class="row"><span>Video / Editor</span><b>${esc(s.videoEditor)}</b></div>`:''}${s.contentStrat?`<div class="row"><span>Content Strat</span><b>${esc(s.contentStrat)}</b></div>`:''}${s.units?`<div class="units">${esc(s.units)}</div>`:''}<div class="acts"><input type="date" class="reInp" value="${keyFromMs(s.date)}" hidden><button class="mini" data-act="resched">Reschedule</button><button class="mini" data-act="save" hidden>Save</button><button class="mini" data-act="cancel" hidden>Cancel</button><button class="mini del" data-act="del">Delete</button><button class="mini del" data-act="delyes" hidden>Confirm delete</button></div></div>`).join(''):'<div class="sidenone">No shoots this day.</div>';
+    html+=`<button class="btn" id="sideNew" style="width:100%">+ New Shoot on ${prettyDay(calSelKey)}</button>`;side.innerHTML=html;}
   document.getElementById('calGrid').addEventListener('click',e=>{const c=e.target.closest('.daycell');if(!c)return;calSelKey=c.dataset.key;renderCal();});
+  document.getElementById('calSide').addEventListener('click',async e=>{
+    if(e.target.id==='sideNew'){go('new');document.getElementById('sdate').value=calSelKey;updateBar();return;}
+    const btn=e.target.closest('[data-act]');const card=e.target.closest('.sideshoot');if(!btn||!card)return;
+    const id=card.dataset.id,act=btn.dataset.act;const show=(sel,on)=>card.querySelectorAll(sel).forEach(x=>x.hidden=!on);
+    if(act==='resched'){show('[data-act=resched]',false);show('[data-act=del]',false);show('.reInp',true);show('[data-act=save]',true);show('[data-act=cancel]',true);}
+    else if(act==='cancel'){show('.reInp',false);show('[data-act=save]',false);show('[data-act=cancel]',false);show('[data-act=delyes]',false);show('[data-act=resched]',true);show('[data-act=del]',true);}
+    else if(act==='del'){show('[data-act=resched]',false);show('[data-act=del]',false);show('[data-act=delyes]',true);show('[data-act=cancel]',true);}
+    else if(act==='save'){const date=card.querySelector('.reInp').value;if(!date)return;btn.textContent='Saving…';btn.disabled=true;
+      try{const r=await fetch('/api/shoots/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,date})});const j=await r.json();if(!j.ok)throw new Error(j.error||'failed');await loadShoots();renderCal();}
+      catch(err){modal(false,'Could not reschedule',String(err.message||err));btn.textContent='Save';btn.disabled=false;}}
+    else if(act==='delyes'){btn.textContent='Deleting…';btn.disabled=true;
+      try{const r=await fetch('/api/shoots/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});const j=await r.json();if(!j.ok)throw new Error(j.error||'failed');await loadShoots();renderCal();}
+      catch(err){modal(false,'Could not delete',String(err.message||err));btn.textContent='Confirm delete';btn.disabled=false;}}
+  });
   document.getElementById('calPrev').addEventListener('click',()=>{calM--;if(calM<0){calM=11;calY--;}renderCal();});
   document.getElementById('calNext').addEventListener('click',()=>{calM++;if(calM>11){calM=0;calY++;}renderCal();});
   document.getElementById('calSearch').addEventListener('input',e=>{calQ=e.target.value;renderCal();});

@@ -72,6 +72,27 @@ async function larkFetch(url, init) {
 const larkGet = (url) => larkFetch(url);
 const larkPost = (url, body) =>
   larkFetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+const larkPut = (url, body) =>
+  larkFetch(url, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+const larkDelete = (url) => larkFetch(url, { method: "DELETE" });
+
+// Pull every "rec..." id out of a link field's value (shape varies by API version).
+function extractRecordIds(v) {
+  const ids = [];
+  const walk = (x) => {
+    if (x == null) return;
+    if (typeof x === "string") { if (/^rec[A-Za-z0-9]+$/.test(x)) ids.push(x); return; }
+    if (Array.isArray(x)) { x.forEach(walk); return; }
+    if (typeof x === "object") {
+      if (x.record_ids) walk(x.record_ids);
+      if (x.record_id) walk(x.record_id);
+      if (x.link_record_ids) walk(x.link_record_ids);
+      if (x.id && /^rec/.test(x.id)) walk(x.id);
+    }
+  };
+  walk(v);
+  return [...new Set(ids)];
+}
 
 // Base lives inside a Lark Wiki, so resolve the wiki node -> base app_token.
 let _appToken = null;
@@ -267,9 +288,37 @@ async function getDeliveries() {
     }
     pageToken = j.data.has_more ? j.data.page_token : "";
   } while (pageToken);
-  // newest first
-  items.sort((a, b) => (b.date || 0) - (a.date || 0));
-  return items;
+  // drop blank rows, newest first
+  return items.filter((x) => x.qty > 0).sort((a, b) => (b.date || 0) - (a.date || 0));
+}
+
+// Reschedule a shoot (change its Shoot Date).
+async function updateShoot(body) {
+  const { id, date } = body || {};
+  if (!id) { const e = new Error("Missing shoot id."); e.status = 400; throw e; }
+  const appToken = await baseAppToken();
+  const fields = {};
+  if (date) fields["Shoot Date"] = new Date(`${date}T00:00:00`).getTime();
+  const res = await larkPut(recUrl(appToken, CFG.tblShoots, `/${id}`), { fields });
+  if (res.code !== 0) throw new Error(`update shoot failed: ${res.code} ${res.msg}`);
+  return { id };
+}
+
+// Delete a shoot AND its linked Shoot Items (so the reserved stock is returned).
+async function deleteShoot(body) {
+  const { id } = body || {};
+  if (!id) { const e = new Error("Missing shoot id."); e.status = 400; throw e; }
+  const appToken = await baseAppToken();
+  const g = await larkGet(recUrl(appToken, CFG.tblShoots, `/${id}`));
+  if (g.code === 0 && g.data && g.data.record) {
+    const itemIds = extractRecordIds(g.data.record.fields["Units to Bring"]);
+    for (const iid of itemIds) {
+      await larkDelete(recUrl(appToken, CFG.tblItems, `/${iid}`));
+    }
+  }
+  const res = await larkDelete(recUrl(appToken, CFG.tblShoots, `/${id}`));
+  if (res.code !== 0) throw new Error(`delete shoot failed: ${res.code} ${res.msg}`);
+  return { id };
 }
 
 // Log a delivery -> the Product's "Total Received" rollup rises -> stock rises.
@@ -351,6 +400,14 @@ const server = http.createServer(async (req, res) => {
     if (url === "/api/shoots" && req.method === "POST") {
       const body = await readBody(req);
       const out = await createShoot(body);
+      return sendJson(res, 200, { ok: true, ...out });
+    }
+    if (url === "/api/shoots/update" && req.method === "POST") {
+      const out = await updateShoot(await readBody(req));
+      return sendJson(res, 200, { ok: true, ...out });
+    }
+    if (url === "/api/shoots/delete" && req.method === "POST") {
+      const out = await deleteShoot(await readBody(req));
       return sendJson(res, 200, { ok: true, ...out });
     }
     if (url.startsWith("/api/")) return sendJson(res, 404, { ok: false, error: "Not found" });
