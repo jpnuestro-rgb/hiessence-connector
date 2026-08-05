@@ -201,7 +201,7 @@ async function postWebhookText(text) {
 
 // Build the "Rescheduled" group-chat message with the same details as a new booking.
 function rescheduleText(f) {
-  const lines = ["🔁 PR Shoot Rescheduled", ""];
+  const lines = ["PR Shoot Rescheduled", ""];
   if (f.talent) lines.push(`Talent: ${f.talent}`);
   if (f.dateText) lines.push(`Date: ${f.dateText}`);
   if (f.timeText) lines.push(`Time: ${f.timeText}`);
@@ -350,9 +350,8 @@ async function updateShoot(body) {
   const res = await larkPut(recUrl(appToken, CFG.tblShoots, `/${id}`), { fields });
   if (res.code !== 0) throw new Error(`update shoot failed: ${res.code} ${res.msg}`);
   // Only notify when the date actually moved.
-  let notif;
   if (old && newMs && newMs !== oldMs) {
-    notif = await postWebhookText(rescheduleText({
+    await postWebhookText(rescheduleText({
       talent: readText(old["Talent Name"]),
       dateText: fmtDateMs(newMs),
       timeText: readText(old["Shoot Time"]),
@@ -362,7 +361,7 @@ async function updateShoot(body) {
       unitsText: readText(old["Units Text"]),
     }));
   }
-  return { id, notif };
+  return { id };
 }
 
 // Delete a shoot AND its linked Shoot Items (so the reserved stock is returned).
