@@ -148,7 +148,7 @@ async function getProducts() {
 }
 
 async function createShoot(body) {
-  const { talent, address, date, time, items } = body || {};
+  const { talent, address, date, time, videoEditor, contentStrat, items } = body || {};
   if (!Array.isArray(items) || items.length === 0) {
     const err = new Error("No units selected.");
     err.status = 400;
@@ -162,6 +162,8 @@ async function createShoot(body) {
   };
   if (date) shootFields["Shoot Date"] = new Date(`${date}T00:00:00`).getTime();
   if (time) shootFields["Shoot Time"] = time;
+  if (videoEditor) shootFields["Videographer/Editor"] = videoEditor;
+  if (contentStrat) shootFields["Content Strategy Associate"] = contentStrat;
 
   const shootRes = await larkPost(recUrl(appToken, CFG.tblShoots), { fields: shootFields });
   if (shootRes.code !== 0) throw new Error(`create shoot failed: ${shootRes.code} ${shootRes.msg}`);

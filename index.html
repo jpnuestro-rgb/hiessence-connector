@@ -41,11 +41,12 @@
   .field.dt input::-webkit-calendar-picker-indicator{cursor:pointer;opacity:.7}
   /* Match the native date/time picker highlight to the site (replaces the browser's green) */
   input[type="date"],input[type="time"]{accent-color:#2b2b28}
-  .field input{
+  .field input,.field select{
     width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:10px;font-size:14px;
     background:#fcfbf7;color:var(--ink);font-family:inherit;transition:.15s;
   }
-  .field input:focus{outline:none;border-color:var(--silver);background:#fff;box-shadow:0 0 0 3px rgba(201,199,191,.25)}
+  .field select{cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%238a887f' stroke-width='1.6' d='M1 1.5L6 6.5l5-5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 13px center;padding-right:34px}
+  .field input:focus,.field select:focus{outline:none;border-color:var(--silver);background-color:#fff;box-shadow:0 0 0 3px rgba(201,199,191,.25)}
 
   .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:18px}
   .tabs{display:flex;gap:6px;flex-wrap:wrap}
@@ -135,6 +136,18 @@
       <div class="field"><label class="f">Address <span class="req">*</span></label><input id="addr" placeholder="Shoot location" required></div>
       <div class="field dt"><label class="f">Shooting Date <span class="req">*</span></label><input id="sdate" type="date" required onclick="this.showPicker&&this.showPicker()"></div>
       <div class="field dt"><label class="f">Shooting Time <span class="req">*</span></label><input id="stime" type="time" required onclick="this.showPicker&&this.showPicker()"></div>
+      <div class="field"><label class="f">Videographer/Editor</label><select id="videoEditor">
+        <option value="">— Select —</option>
+        <option>Marky Alpino</option>
+        <option>Jayson Ballano</option>
+        <option>Aaliyah Delos Santos</option>
+        <option>Jan Kurt Rivera</option>
+      </select></div>
+      <div class="field"><label class="f">Content Strategy Associate</label><select id="contentStrat">
+        <option value="">— Select —</option>
+        <option>Julea Aranda</option>
+        <option>Jai Mercado</option>
+      </select></div>
     </div>
   </div>
 
@@ -290,11 +303,12 @@
     const talent=document.getElementById('talent').value||'(no name)';
     const address=document.getElementById('addr').value;
     const date=document.getElementById('sdate').value, time=document.getElementById('stime').value;
+    const videoEditor=document.getElementById('videoEditor').value, contentStrat=document.getElementById('contentStrat').value;
     createBtn.disabled=true; createBtn.textContent='Creating…';
     try{
       const r=await fetch('/api/shoots',{
         method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({talent,address,date,time,items:sel.map(p=>({id:p.id,qty:p.qty}))})
+        body:JSON.stringify({talent,address,date,time,videoEditor,contentStrat,items:sel.map(p=>({id:p.id,qty:p.qty}))})
       });
       const j=await r.json();
       if(!j.ok) throw new Error(j.error||'failed');
