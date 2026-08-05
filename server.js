@@ -23,6 +23,7 @@ const CFG = {
   tblProducts: process.env.TABLE_PRODUCTS || "tblUtz2SKZNW85HD",
   tblShoots: process.env.TABLE_PRSHOOTS || "tblkBmCmFu77v0iE",
   tblItems: process.env.TABLE_SHOOTITEMS || "tblQDe19HojFjVCR",
+  tblDeliveries: process.env.TABLE_DELIVERIES || "tblwYjnDfU2p69MZ",
 };
 
 // ---- Lark API helpers -------------------------------------------------------
@@ -139,6 +140,7 @@ async function getProducts() {
         cat: catFor(catText, name),
         catText,
         stock,
+        reorder: readNumber(f["Reorder Qty"]),
         image: imgToken ? `/api/image/${imgToken}` : null,
       });
     }
@@ -243,6 +245,54 @@ async function createShoot(body) {
   return { shootId, items: created };
 }
 
+// ---- Deliveries (stock-in) --------------------------------------------------
+
+async function getDeliveries() {
+  const appToken = await baseAppToken();
+  const items = [];
+  let pageToken = "";
+  do {
+    const suffix = `?page_size=100${pageToken ? `&page_token=${pageToken}` : ""}`;
+    const j = await larkGet(recUrl(appToken, CFG.tblDeliveries, suffix));
+    if (j.code !== 0) throw new Error(`list deliveries failed: ${j.code} ${j.msg}`);
+    for (const rec of j.data.items || []) {
+      const f = rec.fields || {};
+      items.push({
+        id: rec.record_id,
+        no: readText(f["Delivery No."]),
+        product: readText(f["Product"]),
+        qty: readNumber(f["Quantity Received"]),
+        date: readDateMs(f["Date Received"]),
+      });
+    }
+    pageToken = j.data.has_more ? j.data.page_token : "";
+  } while (pageToken);
+  // newest first
+  items.sort((a, b) => (b.date || 0) - (a.date || 0));
+  return items;
+}
+
+// Log a delivery -> the Product's "Total Received" rollup rises -> stock rises.
+async function createDelivery(body) {
+  const { productId, productName, qty, date } = body || {};
+  const q = Number(qty) || 0;
+  if (!productId || q <= 0) {
+    const err = new Error("Pick a product and a quantity greater than 0.");
+    err.status = 400;
+    throw err;
+  }
+  const appToken = await baseAppToken();
+  const fields = {
+    "Delivery No.": `${productName || "Stock-in"} ×${q}`,
+    "Product": [productId],
+    "Quantity Received": q,
+  };
+  if (date) fields["Date Received"] = new Date(`${date}T00:00:00`).getTime();
+  const res = await larkPost(recUrl(appToken, CFG.tblDeliveries), { fields });
+  if (res.code !== 0) throw new Error(`create delivery failed: ${res.code} ${res.msg}`);
+  return { id: res.data.record.record_id };
+}
+
 // ---- HTTP plumbing ----------------------------------------------------------
 
 function serveIndex(res) {
@@ -288,6 +338,15 @@ const server = http.createServer(async (req, res) => {
     if (url === "/api/shoots" && req.method === "GET") {
       const shoots = await getShoots();
       return sendJson(res, 200, { ok: true, shoots });
+    }
+    if (url === "/api/deliveries" && req.method === "GET") {
+      const deliveries = await getDeliveries();
+      return sendJson(res, 200, { ok: true, deliveries });
+    }
+    if (url === "/api/deliveries" && req.method === "POST") {
+      const body = await readBody(req);
+      const out = await createDelivery(body);
+      return sendJson(res, 200, { ok: true, ...out });
     }
     if (url === "/api/shoots" && req.method === "POST") {
       const body = await readBody(req);
