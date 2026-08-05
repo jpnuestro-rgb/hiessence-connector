@@ -108,6 +108,45 @@
   .flowrow .ic svg{width:16px;height:16px}
   .flowrow small{color:var(--muted);display:block;font-size:12px}
   .modal .close{width:100%;background:var(--ink);color:#fff;border:none;padding:13px;border-radius:12px;font-weight:600;cursor:pointer;font-size:14px}
+
+  /* view switcher */
+  .viewnav{display:inline-flex;gap:4px;background:var(--cream2);border:1px solid var(--line);border-radius:999px;padding:4px;margin-bottom:22px}
+  .vtab{border:none;background:transparent;padding:8px 18px;border-radius:999px;font-size:13px;font-family:inherit;color:var(--muted);cursor:pointer;font-weight:600;transition:.15s}
+  .vtab.active{background:#fff;color:var(--ink);box-shadow:var(--shadow)}
+  /* calendar */
+  .calsearch input{width:100%;padding:12px 16px;border:1px solid var(--line);border-radius:12px;font-size:14px;background:#fcfbf7;font-family:inherit;margin-bottom:18px}
+  .calsearch input:focus{outline:none;border-color:var(--silver);background:#fff}
+  .callayout{display:grid;grid-template-columns:1fr 300px;gap:18px;align-items:start}
+  @media(max-width:820px){.callayout{grid-template-columns:1fr}}
+  .calhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  .calhead .m{font-size:17px;font-weight:600}
+  .calnav{width:34px;height:34px;border:1px solid var(--line);background:#fcfbf7;border-radius:10px;cursor:pointer;font-size:16px;color:var(--ink);display:flex;align-items:center;justify-content:center}
+  .calnav:hover{background:#efece1}
+  .dow{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-bottom:8px}
+  .dow span{font-size:12px;color:var(--muted);padding-left:2px;font-weight:600}
+  .calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+  .daycell{min-height:92px;border:1px solid var(--line);border-radius:12px;background:#fcfbf7;padding:8px;cursor:pointer;transition:.12s;display:flex;flex-direction:column;gap:4px;overflow:hidden}
+  .daycell.empty{background:transparent;border:none;cursor:default}
+  .daycell:hover:not(.empty){border-color:var(--silver)}
+  .daycell.sel{background:#e8f0e8;border-color:var(--good);box-shadow:0 0 0 1px var(--good)}
+  .dnum{font-size:13px;font-weight:600;color:var(--ink)}
+  .daycell.today .dnum{color:var(--good)}
+  .sh{line-height:1.25}
+  .sh .c{font-size:12px;font-weight:600;color:var(--good);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sh .l{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .moren{font-size:11px;color:var(--muted)}
+  .calside{border:1px solid var(--line);border-radius:14px;background:#fff;padding:18px;box-shadow:var(--shadow);position:sticky;top:80px}
+  .calside h3{font-size:18px;margin-bottom:12px}
+  .sideshoot{border:1px solid var(--line);border-radius:11px;padding:12px;margin-bottom:10px;background:#fcfbf7}
+  .sideshoot .st{font-size:14px;font-weight:600;margin-bottom:6px}
+  .sideshoot .row{font-size:12.5px;color:var(--muted);display:flex;gap:8px;margin-top:3px}
+  .sideshoot .row span{min-width:92px}
+  .sideshoot .row b{color:var(--ink);font-weight:500}
+  .sideshoot .units{margin-top:7px;padding-top:7px;border-top:1px dashed var(--line);font-size:12.5px;color:var(--ink);white-space:pre-line}
+  .sidenone{color:var(--muted);font-size:13.5px;margin-bottom:16px}
+  .sidenew{width:100%;background:var(--good);color:#fff;border:none;padding:12px;border-radius:11px;font-weight:600;cursor:pointer;font-size:13.5px;font-family:inherit}
+  .sidenew:hover{background:#416f50}
+  .calnote{grid-column:1/-1;text-align:center;color:var(--muted);padding:30px;font-size:13px;line-height:1.6}
 </style>
 </head>
 <body>
@@ -125,6 +164,12 @@
 </header>
 
 <div class="wrap">
+  <div class="viewnav">
+    <button class="vtab active" data-view="new">New Shoot</button>
+    <button class="vtab" data-view="cal">Calendar</button>
+  </div>
+
+  <div id="viewNew">
   <h1 class="title">New PR Shoot</h1>
   <p class="lead">Enter the details, pick what to bring — all in one place.</p>
 
@@ -164,6 +209,28 @@
       <div class="search"><input id="search" placeholder="Search unit…"></div>
     </div>
     <div class="cards" id="cards"><div class="state">Loading products from Lark…</div></div>
+  </div>
+  </div><!-- /viewNew -->
+
+  <!-- CALENDAR -->
+  <div id="viewCal" style="display:none">
+    <h1 class="title">Shoot Calendar</h1>
+    <p class="lead">Every PR shoot, pulled live from Lark — talent, address, who's in charge, date &amp; time, and units to bring.</p>
+    <div class="section">
+      <div class="calsearch"><input id="calSearch" placeholder="Search shoots by client or location…"></div>
+      <div class="callayout">
+        <div class="calmain">
+          <div class="calhead">
+            <button class="calnav" id="calPrev" aria-label="Previous month">&lsaquo;</button>
+            <div class="m" id="calMonth">—</div>
+            <button class="calnav" id="calNext" aria-label="Next month">&rsaquo;</button>
+          </div>
+          <div class="dow"><span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span></div>
+          <div class="calgrid" id="calGrid"><div class="calnote">Loading shoots from Lark…</div></div>
+        </div>
+        <div class="calside" id="calSide"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -323,6 +390,102 @@
   });
   document.getElementById('closeM').addEventListener('click',()=>overlay.classList.remove('on'));
   overlay.addEventListener('click',e=>{if(e.target.id==='overlay')e.target.classList.remove('on');});
+
+  // ---- Calendar view ----------------------------------------------------
+  const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const pad=n=>String(n).padStart(2,'0');
+  const esc=t=>String(t==null?'':t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const keyFromMs=ms=>{const d=new Date(ms);return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`;};
+  const todayKey=()=>{const d=new Date();return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;};
+  const keyOf=(y,m,day)=>`${y}-${pad(m+1)}-${pad(day)}`;
+  const prettyDay=key=>{const [y,m,d]=key.split('-').map(Number);return `${MONTHS[m-1].slice(0,3)} ${d}`;};
+
+  let S=[], calY, calM, calSelKey=null, calQ='', calLoaded=false;
+  { const n=new Date(); calY=n.getFullYear(); calM=n.getMonth(); calSelKey=todayKey(); }
+
+  const calMatches=s=>{
+    if(!calQ) return true;
+    const q=calQ.toLowerCase();
+    return (s.talent||'').toLowerCase().includes(q) || (s.address||'').toLowerCase().includes(q);
+  };
+  const shootsOn=key=>S.filter(s=>s.date && keyFromMs(s.date)===key && calMatches(s));
+
+  async function loadShoots(){
+    const grid=document.getElementById('calGrid');
+    try{
+      const r=await fetch('/api/shoots'); const j=await r.json();
+      if(!j.ok) throw new Error(j.error||'load failed');
+      S=(j.shoots||[]).filter(s=>s.date);
+      calLoaded=true; renderCal();
+    }catch(e){
+      grid.innerHTML='<div class="calnote">Could not load shoots.<br><small>('+esc(String(e.message||e))+')</small></div>';
+    }
+  }
+
+  function renderCal(){
+    const grid=document.getElementById('calGrid');
+    document.getElementById('calMonth').textContent=`${MONTHS[calM]} ${calY}`;
+    const first=new Date(Date.UTC(calY,calM,1)).getUTCDay();
+    const days=new Date(Date.UTC(calY,calM+1,0)).getUTCDate();
+    const tKey=todayKey();
+    let html='';
+    for(let i=0;i<first;i++) html+='<div class="daycell empty"></div>';
+    for(let d=1;d<=days;d++){
+      const key=keyOf(calY,calM,d);
+      const list=shootsOn(key);
+      const cls=['daycell'];
+      if(key===tKey) cls.push('today');
+      if(key===calSelKey) cls.push('sel');
+      let chips=list.slice(0,2).map(s=>`<div class="sh"><div class="c">${esc(s.talent||'(no name)')}</div><div class="l">${esc(s.address||'')}</div></div>`).join('');
+      if(list.length>2) chips+=`<div class="moren">+${list.length-2} more</div>`;
+      html+=`<div class="${cls.join(' ')}" data-key="${key}"><div class="dnum">${d}</div>${chips}</div>`;
+    }
+    grid.innerHTML=html;
+    renderSide();
+  }
+
+  function renderSide(){
+    const side=document.getElementById('calSide');
+    if(!calSelKey){side.innerHTML='<h3>Select a day</h3><div class="sidenone">Tap a day to see its shoots.</div>';return;}
+    const list=shootsOn(calSelKey);
+    let html=`<h3>${prettyDay(calSelKey)}</h3>`;
+    if(!list.length){
+      html+='<div class="sidenone">No shoots this day.</div>';
+    }else{
+      html+=list.map(s=>`<div class="sideshoot">
+        <div class="st">${esc(s.talent||'(no name)')}</div>
+        ${s.time?`<div class="row"><span>Time</span><b>${esc(s.time)}</b></div>`:''}
+        ${s.address?`<div class="row"><span>Address</span><b>${esc(s.address)}</b></div>`:''}
+        ${s.videoEditor?`<div class="row"><span>Video / Editor</span><b>${esc(s.videoEditor)}</b></div>`:''}
+        ${s.contentStrat?`<div class="row"><span>Content Strat</span><b>${esc(s.contentStrat)}</b></div>`:''}
+        ${s.units?`<div class="units">${esc(s.units)}</div>`:''}
+      </div>`).join('');
+    }
+    html+=`<button class="sidenew" id="sideNew">+ New Shoot on ${prettyDay(calSelKey)}</button>`;
+    side.innerHTML=html;
+    document.getElementById('sideNew').addEventListener('click',()=>{
+      switchView('new');
+      const inp=document.getElementById('sdate'); inp.value=calSelKey; updateBar();
+      window.scrollTo({top:0,behavior:'smooth'});
+    });
+  }
+
+  document.getElementById('calGrid').addEventListener('click',e=>{
+    const cell=e.target.closest('.daycell'); if(!cell||cell.classList.contains('empty'))return;
+    calSelKey=cell.dataset.key; renderCal();
+  });
+  document.getElementById('calPrev').addEventListener('click',()=>{calM--;if(calM<0){calM=11;calY--;}renderCal();});
+  document.getElementById('calNext').addEventListener('click',()=>{calM++;if(calM>11){calM=0;calY++;}renderCal();});
+  document.getElementById('calSearch').addEventListener('input',e=>{calQ=e.target.value;renderCal();});
+
+  function switchView(v){
+    document.querySelectorAll('.vtab').forEach(t=>t.classList.toggle('active',t.dataset.view===v));
+    document.getElementById('viewNew').style.display=v==='new'?'':'none';
+    document.getElementById('viewCal').style.display=v==='cal'?'':'none';
+    document.querySelector('.bar').style.display=v==='new'?'':'none';
+    if(v==='cal') loadShoots();
+  }
+  document.querySelector('.viewnav').addEventListener('click',e=>{const t=e.target.closest('.vtab');if(t)switchView(t.dataset.view);});
 
   loadProducts(); updateBar();
 </script>

@@ -147,6 +147,42 @@ async function getProducts() {
   return items;
 }
 
+// Read a Lark date field (stored as epoch ms) into a number, or null.
+function readDateMs(v) {
+  if (v == null) return null;
+  const n = typeof v === "object" && v && v.value != null ? v.value : v;
+  const num = Number(Array.isArray(n) ? n[0] : n);
+  return Number.isFinite(num) ? num : null;
+}
+
+// List every PR Shoot (for the website calendar view).
+async function getShoots() {
+  const appToken = await baseAppToken();
+  const items = [];
+  let pageToken = "";
+  do {
+    const suffix = `?page_size=100${pageToken ? `&page_token=${pageToken}` : ""}`;
+    const j = await larkGet(recUrl(appToken, CFG.tblShoots, suffix));
+    if (j.code !== 0) throw new Error(`list shoots failed: ${j.code} ${j.msg}`);
+    for (const rec of j.data.items || []) {
+      const f = rec.fields || {};
+      items.push({
+        id: rec.record_id,
+        talent: readText(f["Talent Name"]),
+        date: readDateMs(f["Shoot Date"]),
+        time: readText(f["Shoot Time"]),
+        address: readText(f["Address"]),
+        status: readText(f["Status"]),
+        videoEditor: readText(f["Videographer/Editor"]),
+        contentStrat: readText(f["Content Strategy Associate"]),
+        units: readText(f["Units Text"]),
+      });
+    }
+    pageToken = j.data.has_more ? j.data.page_token : "";
+  } while (pageToken);
+  return items;
+}
+
 // Convert a 24-hour "HH:MM" time (from the website input) to "H:MM AM/PM".
 function to12Hour(t) {
   const m = /^(\d{1,2}):(\d{2})/.exec(String(t || ""));
@@ -248,6 +284,10 @@ const server = http.createServer(async (req, res) => {
       if (!r.ok) { res.writeHead(502); return res.end(); }
       res.writeHead(200, { "Content-Type": r.headers.get("content-type") || "image/jpeg", "Cache-Control": "public, max-age=86400" });
       return res.end(Buffer.from(await r.arrayBuffer()));
+    }
+    if (url === "/api/shoots" && req.method === "GET") {
+      const shoots = await getShoots();
+      return sendJson(res, 200, { ok: true, shoots });
     }
     if (url === "/api/shoots" && req.method === "POST") {
       const body = await readBody(req);
