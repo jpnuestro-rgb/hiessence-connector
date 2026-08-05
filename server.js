@@ -176,6 +176,22 @@ async function createShoot(body) {
   if (videoEditor) shootFields["Videographer/Editor"] = videoEditor;
   if (contentStrat) shootFields["Content Strategy Associate"] = contentStrat;
 
+  // Pre-format the units as plain text (one "Name ×qty" per line) and store it on
+  // the shoot record itself. The "new record" automation snapshots the shoot the
+  // instant it is created — before the linked Shoot Items exist — so the linked
+  // "Units to Bring" / "Units List" fields are still empty at that moment. Writing
+  // the text here makes the unit list available in that first snapshot.
+  try {
+    const products = await getProducts();
+    const nameById = new Map(products.map((p) => [p.id, p.name]));
+    const unitsText = items
+      .map((it) => `${nameById.get(it.id) || "Item"} ×${Number(it.qty) || 0}`)
+      .join("\n");
+    if (unitsText) shootFields["Units Text"] = unitsText;
+  } catch (_) {
+    /* non-fatal: fall back to the linked-field automations if lookup fails */
+  }
+
   const shootRes = await larkPost(recUrl(appToken, CFG.tblShoots), { fields: shootFields });
   if (shootRes.code !== 0) throw new Error(`create shoot failed: ${shootRes.code} ${shootRes.msg}`);
   const shootId = shootRes.data.record.record_id;
