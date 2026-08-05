@@ -673,6 +673,40 @@ const server = http.createServer(async (req, res) => {
     if (url === "/api/health") {
       return sendJson(res, 200, { ok: true, appIdSet: !!CFG.appId, secretSet: !!CFG.appSecret, domain: CFG.domain });
     }
+    // One-time (idempotent) backfill: put existing shoots onto the shared calendar.
+    // Only creates an event for shoots that don't already have a "Calendar Event ID".
+    if (url === "/api/calendar/backfill") {
+      const out = { created: [], skipped: 0 };
+      try {
+        const appToken = await baseAppToken();
+        await ensureEventIdField();
+        let pageToken = "";
+        do {
+          const suffix = `?page_size=100${pageToken ? `&page_token=${pageToken}` : ""}`;
+          const j = await larkGet(recUrl(appToken, CFG.tblShoots, suffix));
+          if (j.code !== 0) { out.err = `list failed: ${j.code} ${j.msg}`; break; }
+          for (const rec of j.data.items || []) {
+            const f = rec.fields || {};
+            const existing = readText(f["Calendar Event ID"]);
+            const dateMs = readDateMs(f["Shoot Date"]);
+            if (existing || !dateMs) { out.skipped++; continue; }
+            const eventId = await createShootEvent({
+              dateMs,
+              timeText: readText(f["Shoot Time"]),
+              talent: readText(f["Talent Name"]),
+              address: readText(f["Address"]),
+              unitsText: readText(f["Units Text"]),
+            });
+            if (eventId) {
+              await larkPut(recUrl(appToken, CFG.tblShoots, `/${rec.record_id}`), { fields: { "Calendar Event ID": eventId } });
+              out.created.push(readText(f["Talent Name"]) || rec.record_id);
+            }
+          }
+          pageToken = j.data.has_more ? j.data.page_token : "";
+        } while (pageToken);
+      } catch (e) { out.err = String(e && e.message || e); }
+      return sendJson(res, 200, out);
+    }
     if (url === "/api/products" && req.method === "GET") {
       const products = await getProducts();
       return sendJson(res, 200, { ok: true, products });
