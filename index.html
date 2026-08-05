@@ -143,6 +143,8 @@
   .mini.del{color:var(--warn);border-color:#e7cdbf}
   .mini.del[data-act="delyes"]{background:var(--warn);color:#fff;border-color:var(--warn)}
   .acts .reInp{font-size:12px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;font-family:inherit;background:#fcfbf7}
+  .sh{cursor:grab}.sh:active{cursor:grabbing}
+  .daycell.dragover{outline:2px dashed #4b7d5b;outline-offset:-2px;background:#f2f6f0}
 
   /* modal */
   .overlay{position:fixed;inset:0;background:rgba(30,29,26,.5);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
@@ -193,7 +195,7 @@
       <!-- DASHBOARD -->
       <div class="view on" id="v-dash">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px">
-          <div><h1 class="title">Dashboard</h1><p class="lead">Mabilisang tingin sa paparating na shoots at inventory.</p></div>
+          <div><h1 class="title">Dashboard</h1><p class="lead">A quick look at upcoming shoots and inventory.</p></div>
           <div style="display:flex;gap:10px"><button class="btn" data-go="new">+ New Shoot</button><button class="btn dark" data-go="deliveries">+ Log delivery</button></div>
         </div>
         <div class="tiles" style="margin-bottom:18px" id="kpis"></div>
@@ -211,8 +213,8 @@
 
       <!-- NEW SHOOT -->
       <div class="view" id="v-new">
-        <h1 class="title">New PR Shoot</h1>
-        <p class="lead">Enter the details, pick what to bring — all in one place.</p>
+        <h1 class="title" id="newTitle">New PR Shoot</h1>
+        <p class="lead" id="newLead">Enter the details and pick what to bring, all in one place.</p>
         <div class="section">
           <h2>Shoot Details</h2>
           <div class="grid2">
@@ -220,8 +222,8 @@
             <div class="field"><label class="f">Address <span class="req">*</span></label><input id="addr" placeholder="Shoot location"></div>
             <div class="field"><label class="f">Shooting Date <span class="req">*</span></label><input id="sdate" type="date" onclick="this.showPicker&&this.showPicker()"></div>
             <div class="field"><label class="f">Shooting Time <span class="req">*</span></label><input id="stime" type="time" onclick="this.showPicker&&this.showPicker()"></div>
-            <div class="field"><label class="f">Videographer/Editor</label><select id="videoEditor"><option value="">— Select —</option><option>Marky Alpino</option><option>Jayson Ballano</option><option>Aaliyah Delos Santos</option><option>Jan Kurt Rivera</option></select></div>
-            <div class="field"><label class="f">Content Strategy Associate</label><select id="contentStrat"><option value="">— Select —</option><option>Julea Aranda</option><option>Jai Mercado</option></select></div>
+            <div class="field"><label class="f">Videographer/Editor</label><select id="videoEditor"><option value="">Select…</option><option>Marky Alpino</option><option>Jayson Ballano</option><option>Aaliyah Delos Santos</option><option>Jan Kurt Rivera</option></select></div>
+            <div class="field"><label class="f">Content Strategy Associate</label><select id="contentStrat"><option value="">Select…</option><option>Julea Aranda</option><option>Jai Mercado</option></select></div>
           </div>
         </div>
         <div class="section">
@@ -237,12 +239,12 @@
       <!-- CALENDAR -->
       <div class="view" id="v-cal">
         <h1 class="title">Shoot Calendar</h1>
-        <p class="lead">Every PR shoot, pulled live from Lark — talent, address, who's in charge, date &amp; time, and units.</p>
+        <p class="lead">Every PR shoot, pulled live from Lark: talent, address, who's in charge, date and time, and units.</p>
         <div class="section">
           <div class="field" style="margin-bottom:16px"><input id="calSearch" placeholder="Search shoots by client or location…"></div>
           <div class="callayout">
             <div>
-              <div class="calhead"><button class="calnav" id="calPrev">&lsaquo;</button><div class="m" id="calMonth">—</div><button class="calnav" id="calNext">&rsaquo;</button></div>
+              <div class="calhead"><button class="calnav" id="calPrev">&lsaquo;</button><div class="m" id="calMonth"></div><button class="calnav" id="calNext">&rsaquo;</button></div>
               <div class="dow"><span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span></div>
               <div class="calgrid" id="calGrid"><div class="calnote">Loading…</div></div>
             </div>
@@ -254,7 +256,7 @@
       <!-- STOCKS -->
       <div class="view" id="v-stocks">
         <h1 class="title">Stocks</h1>
-        <p class="lead">Live inventory mula sa Lark. Ang low/zero na stock ay naka-pula — mag-add via Deliveries.</p>
+        <p class="lead">Live inventory from Lark. Low or zero stock is shown in red; add stock from Deliveries.</p>
         <div class="section"><h2>Inventory</h2>
           <div class="search" style="margin-bottom:14px;max-width:280px"><input id="stockSearch" placeholder="Search product…"></div>
           <div style="overflow-x:auto"><table><thead><tr><th>Product</th><th>Category</th><th>On hand</th></tr></thead><tbody id="stockRows"><tr><td colspan="3" class="pcat">Loading…</td></tr></tbody></table></div>
@@ -264,10 +266,10 @@
       <!-- DELIVERIES -->
       <div class="view" id="v-deliveries">
         <h1 class="title">Deliveries</h1>
-        <p class="lead">Mag-log ng dumating na delivery — awtomatikong madadagdag sa stock.</p>
+        <p class="lead">Log an incoming delivery. It is added to stock automatically.</p>
         <div class="section"><h2>Log a delivery</h2>
           <div class="grid2">
-            <div class="field"><label class="f">Product <span class="req">*</span></label><select id="dlProduct"><option value="">— Select —</option></select></div>
+            <div class="field"><label class="f">Product <span class="req">*</span></label><select id="dlProduct"><option value="">Select…</option></select></div>
             <div class="field"><label class="f">Quantity received <span class="req">*</span></label><input id="dlQty" type="number" min="1" placeholder="e.g. 5"></div>
             <div class="field"><label class="f">Date received</label><input id="dlDate" type="date" onclick="this.showPicker&&this.showPicker()"></div>
           </div>
@@ -279,7 +281,7 @@
       <!-- INSIGHTS -->
       <div class="view" id="v-insights">
         <h1 class="title">Insights</h1>
-        <p class="lead">Mabilisang datos mula sa Lark.</p>
+        <p class="lead">Quick numbers from Lark.</p>
         <div class="tiles" id="insightTiles"></div>
       </div>
 
@@ -293,7 +295,8 @@
 <!-- MODAL -->
 <div class="overlay" id="overlay"><div class="modal">
   <div class="check" id="mIcon"><svg viewBox="0 0 24 24" fill="none" stroke="#4b7d5b" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div>
-  <h3 id="mTitle">Done</h3><p class="msub" id="mSub"></p><button class="close" id="closeM">Got it</button>
+  <h3 id="mTitle">Done</h3><p class="msub" id="mSub"></p>
+  <div style="display:flex;gap:10px"><button class="close" id="mCancel" style="background:#efece1;color:var(--ink);display:none">Cancel</button><button class="close" id="closeM">Got it</button></div>
 </div></div>
 
 <script>
@@ -349,25 +352,46 @@
   ['talent','addr','sdate','stime'].forEach(id=>document.getElementById(id).addEventListener('input',updateBar));
 
   const overlay=document.getElementById('overlay');
-  function modal(ok,title,sub){document.getElementById('mIcon').className='check'+(ok?'':' err');
-    document.getElementById('mIcon').innerHTML=ok?'<svg viewBox="0 0 24 24" fill="none" stroke="#4b7d5b" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>':'<svg viewBox="0 0 24 24" fill="none" stroke="#b06a4a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v5M12 16.5v.5"/><circle cx="12" cy="12" r="9"/></svg>';
-    document.getElementById('mTitle').textContent=title;document.getElementById('mSub').textContent=sub;overlay.classList.add('on');}
-  document.getElementById('closeM').addEventListener('click',()=>overlay.classList.remove('on'));
-  overlay.addEventListener('click',e=>{if(e.target.id==='overlay')e.target.classList.remove('on');});
-
   const createBtn=document.getElementById('createBtn');
+  const okBtn=document.getElementById('closeM'),cancelBtn=document.getElementById('mCancel');
+  const ICON_OK='<svg viewBox="0 0 24 24" fill="none" stroke="#4b7d5b" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+  const ICON_ERR='<svg viewBox="0 0 24 24" fill="none" stroke="#b06a4a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v5M12 16.5v.5"/><circle cx="12" cy="12" r="9"/></svg>';
+  const ICON_ASK='<svg viewBox="0 0 24 24" fill="none" stroke="#4b7d5b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.6 9a2.4 2.4 0 113.4 2.2c-.8.4-1 .9-1 1.6M12 16.5v.5"/><circle cx="12" cy="12" r="9"/></svg>';
+  const closeModal=()=>overlay.classList.remove('on');
+  function modal(ok,title,sub){document.getElementById('mIcon').className='check'+(ok?'':' err');document.getElementById('mIcon').innerHTML=ok?ICON_OK:ICON_ERR;
+    document.getElementById('mTitle').textContent=title;document.getElementById('mSub').textContent=sub;cancelBtn.style.display='none';okBtn.textContent='Got it';okBtn.onclick=closeModal;overlay.classList.add('on');}
+  function confirmModal(title,sub,okLabel){return new Promise(resolve=>{document.getElementById('mIcon').className='check';document.getElementById('mIcon').innerHTML=ICON_ASK;
+    document.getElementById('mTitle').textContent=title;document.getElementById('mSub').textContent=sub;cancelBtn.style.display='';okBtn.textContent=okLabel||'Confirm';
+    const done=v=>{overlay.classList.remove('on');okBtn.onclick=null;cancelBtn.onclick=null;resolve(v);};okBtn.onclick=()=>done(true);cancelBtn.onclick=()=>done(false);overlay.classList.add('on');});}
+  overlay.addEventListener('click',e=>{if(e.target.id==='overlay'){closeModal();if(cancelBtn.onclick)cancelBtn.onclick();}});
+
+  let editingId=null;
+  const from12Hour=t=>{const m=/(\d{1,2}):(\d{2})\s*(AM|PM)?/i.exec(t||'');if(!m)return'';let h=+m[1];const min=m[2];const ap=(m[3]||'').toUpperCase();if(ap==='PM'&&h<12)h+=12;if(ap==='AM'&&h===12)h=0;return `${String(h).padStart(2,'0')}:${min}`;};
+  function resetEditMode(){editingId=null;document.getElementById('newTitle').textContent='New PR Shoot';document.getElementById('newLead').textContent='Enter the details and pick what to bring, all in one place.';createBtn.textContent='Create PR Shoot →';['talent','addr','sdate','stime'].forEach(id=>document.getElementById(id).value='');document.getElementById('videoEditor').value='';document.getElementById('contentStrat').value='';P.forEach(p=>p.qty=0);}
+  async function startEdit(shoot){if(!shoot)return;await ensureProducts();editingId=shoot.id;
+    document.getElementById('talent').value=shoot.talent||'';document.getElementById('addr').value=shoot.address||'';
+    document.getElementById('sdate').value=keyFromMs(shoot.date);document.getElementById('stime').value=from12Hour(shoot.time);
+    document.getElementById('videoEditor').value=shoot.videoEditor||'';document.getElementById('contentStrat').value=shoot.contentStrat||'';
+    P.forEach(p=>p.qty=0);
+    try{const r=await fetch('/api/shoots/items?id='+encodeURIComponent(shoot.id));const j=await r.json();(j.items||[]).forEach(it=>{const p=P.find(x=>x.id===it.id);if(p)p.qty=it.qty;});}catch(_){}
+    document.getElementById('newTitle').textContent='Edit Shoot';document.getElementById('newLead').textContent='Change the details or units. Stock adjusts automatically.';createBtn.textContent='Save changes';
+    go('new');renderCards();updateBar();}
+
   createBtn.addEventListener('click',async()=>{const sel=P.filter(p=>p.qty>0);const units=sel.reduce((s,p)=>s+p.qty,0);
     const talent=document.getElementById('talent').value||'(no name)',address=document.getElementById('addr').value;
     const date=document.getElementById('sdate').value,time=document.getElementById('stime').value;
     const videoEditor=document.getElementById('videoEditor').value,contentStrat=document.getElementById('contentStrat').value;
-    createBtn.disabled=true;createBtn.textContent='Creating…';
-    try{const r=await fetch('/api/shoots',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({talent,address,date,time,videoEditor,contentStrat,items:sel.map(p=>({id:p.id,qty:p.qty}))})});
+    const editing=editingId;
+    const go1=await confirmModal(editing?'Save changes to this shoot?':'Create this PR shoot?',`${talent}, ${date||'no date'}, ${units} unit${units===1?'':'s'}. This updates Lark and stock.`,editing?'Save changes':'Yes, create');
+    if(!go1)return;
+    createBtn.disabled=true;createBtn.textContent=editing?'Saving…':'Creating…';
+    try{const url=editing?'/api/shoots/edit':'/api/shoots';const payload={talent,address,date,time,videoEditor,contentStrat,items:sel.map(p=>({id:p.id,qty:p.qty}))};if(editing)payload.id=editing;
+      const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
       const j=await r.json();if(!j.ok)throw new Error(j.error||'failed');
-      modal(true,`Shoot for ${talent} — created`,`Added to Lark calendar, notification sent, and ${units} units deducted from stock.`);
-      P.forEach(p=>p.qty=0);renderCards();updateBar();['talent','addr','sdate','stime'].forEach(id=>document.getElementById(id).value='');
-      await loadProducts();renderCards();S=[];}
-    catch(e){modal(false,'Could not create the shoot',String(e.message||e));}
-    finally{createBtn.textContent='Create PR Shoot →';updateBar();}});
+      modal(true,editing?'Shoot updated':`Shoot created for ${talent}`,editing?'Your changes are saved and stock is updated.':`Added to Lark calendar, notification sent, and ${units} units deducted from stock.`);
+      resetEditMode();renderCards();updateBar();await loadProducts();renderCards();S=[];}
+    catch(e){modal(false,editing?'Could not save changes':'Could not create the shoot',String(e.message||e));}
+    finally{createBtn.textContent=editing?'Save changes':'Create PR Shoot →';createBtn.disabled=false;updateBar();}});
 
   // ---------- Stocks ----------
   let stockQ='';
@@ -380,11 +404,11 @@
 
   // ---------- Deliveries ----------
   function fillDlProducts(){const sel=document.getElementById('dlProduct');const cur=sel.value;
-    sel.innerHTML='<option value="">— Select —</option>'+P.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(p=>`<option value="${p.id}">${esc(p.name)} (${p.stock} in stock)</option>`).join('');
+    sel.innerHTML='<option value="">Select…</option>'+P.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(p=>`<option value="${p.id}">${esc(p.name)} (${p.stock} in stock)</option>`).join('');
     sel.value=cur;}
   function renderDeliveries(){const el=document.getElementById('dlList');
-    if(!D.length){el.innerHTML='<div class="calnote">Wala pang naka-log na delivery.</div>';return;}
-    el.innerHTML=D.slice(0,20).map(d=>`<div class="drow"><div><b>${esc(d.product||'—')}</b> <span class="plus">+${d.qty}</span></div><div class="sub">${d.date?prettyMs(d.date):''}</div></div>`).join('');}
+    if(!D.length){el.innerHTML='<div class="calnote">No deliveries logged yet.</div>';return;}
+    el.innerHTML=D.slice(0,20).map(d=>`<div class="drow"><div><b>${esc(d.product||'')}</b> <span class="plus">+${d.qty}</span></div><div class="sub">${d.date?prettyMs(d.date):''}</div></div>`).join('');}
   const dlBtn=document.getElementById('dlBtn');
   function dlCheck(){dlBtn.disabled=!(document.getElementById('dlProduct').value && Number(document.getElementById('dlQty').value)>0);}
   document.getElementById('dlProduct').addEventListener('change',dlCheck);
@@ -412,9 +436,9 @@
     document.getElementById('kpis').innerHTML=kpi.map(k=>`<div class="tile"><div class="big" ${k[2]?`style="color:${k[2]}"`:''}>${k[1]}</div><div class="lbl">${k[0]}</div></div>`).join('');
     document.getElementById('insightTiles').innerHTML=document.getElementById('kpis').innerHTML;
     const ds=document.getElementById('dashShoots');
-    ds.innerHTML=up.length?up.slice(0,6).map(s=>`<div class="drow"><div><b>${esc(s.talent||'(no name)')}</b><div class="sub">${esc(s.address||'')}</div></div><div class="sub">${prettyMs(s.date)}${s.time?' · '+esc(s.time):''}</div></div>`).join(''):'<div class="calnote">Walang paparating na shoot.</div>';
+    ds.innerHTML=up.length?up.slice(0,6).map(s=>`<div class="drow"><div><b>${esc(s.talent||'(no name)')}</b><div class="sub">${esc(s.address||'')}</div></div><div class="sub">${prettyMs(s.date)}${s.time?' · '+esc(s.time):''}</div></div>`).join(''):'<div class="calnote">No upcoming shoots.</div>';
     const dl=document.getElementById('dashLow');
-    dl.innerHTML=low.length?low.slice().sort((a,b)=>a.stock-b.stock).slice(0,6).map(p=>`<div class="drow"><div><span class="dot"></span><b>${esc(p.name)}</b><div class="sub" style="margin-left:16px">${CATLABEL[p.cat]}</div></div><span class="pill low">${p.stock} left</span></div>`).join(''):'<div class="calnote">Okay lahat ng stock. 👍</div>';
+    dl.innerHTML=low.length?low.slice().sort((a,b)=>a.stock-b.stock).slice(0,6).map(p=>`<div class="drow"><div><span class="dot"></span><b>${esc(p.name)}</b><div class="sub" style="margin-left:16px">${CATLABEL[p.cat]}</div></div><span class="pill low">${p.stock} left</span></div>`).join(''):'<div class="calnote">All stock levels are healthy.</div>';
     const low2=P.filter(isLow).length;document.getElementById('lowCount').textContent=low2?low2:'';
   }
 
@@ -426,26 +450,35 @@
   function renderCal(){const grid=document.getElementById('calGrid');document.getElementById('calMonth').textContent=`${MONTHS[calM]} ${calY}`;
     const first=new Date(Date.UTC(calY,calM,1)).getUTCDay();const days=new Date(Date.UTC(calY,calM+1,0)).getUTCDate();const tKey=todayKey();let html='';
     for(let d=1;d<=days;d++){const key=keyOf(calY,calM,d);const list=shootsOn(key);const cls=['daycell'];if(key===tKey)cls.push('today');if(key===calSelKey)cls.push('sel');
-      let chips=list.slice(0,2).map(s=>`<div class="sh"><div class="c">${esc(s.talent||'(no name)')}</div><div class="l">${esc(s.address||'')}</div></div>`).join('');
+      let chips=list.slice(0,2).map(s=>`<div class="sh" draggable="true" data-sid="${s.id}"><div class="c">${esc(s.talent||'(no name)')}</div><div class="l">${esc(s.address||'')}</div></div>`).join('');
       if(list.length>2)chips+=`<div class="moren">+${list.length-2} more</div>`;
       const gcs=d===1?` style="grid-column-start:${first+1}"`:'';
       html+=`<div class="${cls.join(' ')}" data-key="${key}"${gcs}><div class="dnum">${d}</div>${chips}</div>`;}
     grid.innerHTML=html;renderSide();}
   function renderSide(){const side=document.getElementById('calSide');if(!calSelKey){side.innerHTML='';return;}
     const list=shootsOn(calSelKey);let html=`<h3>${prettyDay(calSelKey)}</h3>`;
-    html+=list.length?list.map(s=>`<div class="sideshoot" data-id="${s.id}"><div class="st">${esc(s.talent||'(no name)')}</div>${s.time?`<div class="row"><span>Time</span><b>${esc(s.time)}</b></div>`:''}${s.address?`<div class="row"><span>Address</span><b>${esc(s.address)}</b></div>`:''}${s.videoEditor?`<div class="row"><span>Video / Editor</span><b>${esc(s.videoEditor)}</b></div>`:''}${s.contentStrat?`<div class="row"><span>Content Strat</span><b>${esc(s.contentStrat)}</b></div>`:''}${s.units?`<div class="units">${esc(s.units)}</div>`:''}<div class="acts"><input type="date" class="reInp" value="${keyFromMs(s.date)}" hidden><button class="mini" data-act="resched">Reschedule</button><button class="mini" data-act="save" hidden>Save</button><button class="mini" data-act="cancel" hidden>Cancel</button><button class="mini del" data-act="del">Delete</button><button class="mini del" data-act="delyes" hidden>Confirm delete</button></div></div>`).join(''):'<div class="sidenone">No shoots this day.</div>';
+    html+=list.length?list.map(s=>`<div class="sideshoot" data-id="${s.id}"><div class="st">${esc(s.talent||'(no name)')}</div>${s.time?`<div class="row"><span>Time</span><b>${esc(s.time)}</b></div>`:''}${s.address?`<div class="row"><span>Address</span><b>${esc(s.address)}</b></div>`:''}${s.videoEditor?`<div class="row"><span>Video / Editor</span><b>${esc(s.videoEditor)}</b></div>`:''}${s.contentStrat?`<div class="row"><span>Content Strat</span><b>${esc(s.contentStrat)}</b></div>`:''}${s.units?`<div class="units">${esc(s.units)}</div>`:''}<div class="acts"><button class="mini" data-act="edit">Edit</button><button class="mini del" data-act="del">Delete</button><button class="mini del" data-act="delyes" hidden>Confirm delete</button><button class="mini" data-act="cancel" hidden>Cancel</button></div></div>`).join(''):'<div class="sidenone">No shoots this day.</div>';
     html+=`<button class="btn" id="sideNew" style="width:100%">+ New Shoot on ${prettyDay(calSelKey)}</button>`;side.innerHTML=html;}
   document.getElementById('calGrid').addEventListener('click',e=>{const c=e.target.closest('.daycell');if(!c)return;calSelKey=c.dataset.key;renderCal();});
+  // ----- drag to reschedule -----
+  let dragSid=null;
+  const calGrid=document.getElementById('calGrid');
+  calGrid.addEventListener('dragstart',e=>{const sh=e.target.closest('.sh');if(!sh)return;dragSid=sh.dataset.sid;e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',dragSid);}catch(_){}});
+  calGrid.addEventListener('dragover',e=>{const c=e.target.closest('.daycell');if(c&&dragSid){e.preventDefault();c.classList.add('dragover');}});
+  calGrid.addEventListener('dragleave',e=>{const c=e.target.closest('.daycell');if(c)c.classList.remove('dragover');});
+  calGrid.addEventListener('drop',async e=>{e.preventDefault();const c=e.target.closest('.daycell');const sid=dragSid;dragSid=null;
+    document.querySelectorAll('.daycell.dragover').forEach(x=>x.classList.remove('dragover'));
+    if(!c||!sid)return;const key=c.dataset.key;const s=S.find(x=>x.id===sid);if(!s)return;if(keyFromMs(s.date)===key)return;
+    const ok=await confirmModal('Move this shoot?',`Move ${s.talent||'this shoot'} to ${prettyDay(key)}?`,'Yes, move');if(!ok)return;
+    try{const r=await fetch('/api/shoots/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:sid,date:key})});const j=await r.json();if(!j.ok)throw new Error(j.error||'failed');await loadShoots();renderCal();}
+    catch(err){modal(false,'Could not move the shoot',String(err.message||err));}});
   document.getElementById('calSide').addEventListener('click',async e=>{
-    if(e.target.id==='sideNew'){go('new');document.getElementById('sdate').value=calSelKey;updateBar();return;}
+    if(e.target.id==='sideNew'){resetEditMode();go('new');document.getElementById('sdate').value=calSelKey;updateBar();return;}
     const btn=e.target.closest('[data-act]');const card=e.target.closest('.sideshoot');if(!btn||!card)return;
     const id=card.dataset.id,act=btn.dataset.act;const show=(sel,on)=>card.querySelectorAll(sel).forEach(x=>x.hidden=!on);
-    if(act==='resched'){show('[data-act=resched]',false);show('[data-act=del]',false);show('.reInp',true);show('[data-act=save]',true);show('[data-act=cancel]',true);}
-    else if(act==='cancel'){show('.reInp',false);show('[data-act=save]',false);show('[data-act=cancel]',false);show('[data-act=delyes]',false);show('[data-act=resched]',true);show('[data-act=del]',true);}
-    else if(act==='del'){show('[data-act=resched]',false);show('[data-act=del]',false);show('[data-act=delyes]',true);show('[data-act=cancel]',true);}
-    else if(act==='save'){const date=card.querySelector('.reInp').value;if(!date)return;btn.textContent='Saving…';btn.disabled=true;
-      try{const r=await fetch('/api/shoots/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,date})});const j=await r.json();if(!j.ok)throw new Error(j.error||'failed');await loadShoots();renderCal();}
-      catch(err){modal(false,'Could not reschedule',String(err.message||err));btn.textContent='Save';btn.disabled=false;}}
+    if(act==='edit'){startEdit(S.find(x=>x.id===id));}
+    else if(act==='del'){show('[data-act=edit]',false);show('[data-act=del]',false);show('[data-act=delyes]',true);show('[data-act=cancel]',true);}
+    else if(act==='cancel'){show('[data-act=delyes]',false);show('[data-act=cancel]',false);show('[data-act=edit]',true);show('[data-act=del]',true);}
     else if(act==='delyes'){btn.textContent='Deleting…';btn.disabled=true;
       try{const r=await fetch('/api/shoots/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});const j=await r.json();if(!j.ok)throw new Error(j.error||'failed');await loadShoots();renderCal();}
       catch(err){modal(false,'Could not delete',String(err.message||err));btn.textContent='Confirm delete';btn.disabled=false;}}
@@ -471,8 +504,8 @@
     if(v==='cal'){await loadShoots();renderCal();}
     if(v==='dash'||v==='insights'){await ensureProducts();await loadShoots();await loadDeliveries();renderDash();}
   }
-  document.querySelectorAll('.navitem').forEach(n=>n.addEventListener('click',()=>go(n.dataset.view)));
-  document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.go)));
+  document.querySelectorAll('.navitem').forEach(n=>n.addEventListener('click',()=>{if(n.dataset.view==='new')resetEditMode();go(n.dataset.view);}));
+  document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>{if(b.dataset.go==='new')resetEditMode();go(b.dataset.go);}));
 
   // initial: dashboard
   go('dash');

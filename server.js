@@ -321,6 +321,59 @@ async function deleteShoot(body) {
   return { id };
 }
 
+// Read a shoot's current units (product id + qty) so the Edit form can pre-fill them.
+async function getShootItems(shootId) {
+  if (!shootId) return [];
+  const appToken = await baseAppToken();
+  const g = await larkGet(recUrl(appToken, CFG.tblShoots, `/${shootId}`));
+  if (g.code !== 0 || !g.data || !g.data.record) return [];
+  const itemIds = extractRecordIds(g.data.record.fields["Units to Bring"]);
+  const out = [];
+  for (const iid of itemIds) {
+    const ig = await larkGet(recUrl(appToken, CFG.tblItems, `/${iid}`));
+    if (ig.code === 0 && ig.data && ig.data.record) {
+      const f = ig.data.record.fields || {};
+      const pid = extractRecordIds(f["Product"])[0];
+      if (pid) out.push({ id: pid, qty: readNumber(f["Quantity"]) });
+    }
+  }
+  return out;
+}
+
+// Full edit: update shoot fields AND replace its units (stock re-computes to match).
+async function editShoot(body) {
+  const { id, talent, address, date, time, videoEditor, contentStrat, items } = body || {};
+  if (!id) { const e = new Error("Missing shoot id."); e.status = 400; throw e; }
+  if (!Array.isArray(items) || items.length === 0) { const e = new Error("No units selected."); e.status = 400; throw e; }
+  const appToken = await baseAppToken();
+  const fields = { "Talent Name": talent || "(no name)", "Address": address || "" };
+  if (date) fields["Shoot Date"] = new Date(`${date}T00:00:00`).getTime();
+  if (time) fields["Shoot Time"] = to12Hour(time);
+  if (videoEditor) fields["Videographer/Editor"] = videoEditor;
+  if (contentStrat) fields["Content Strategy Associate"] = contentStrat;
+  try {
+    const products = await getProducts();
+    const nameById = new Map(products.map((p) => [p.id, p.name]));
+    fields["Units Text"] = items.map((it) => `${nameById.get(it.id) || "Item"} ×${Number(it.qty) || 0}`).join("\n");
+  } catch (_) {}
+  // remove the old shoot items, then update the shoot, then create the new items
+  const g = await larkGet(recUrl(appToken, CFG.tblShoots, `/${id}`));
+  if (g.code === 0 && g.data && g.data.record) {
+    for (const iid of extractRecordIds(g.data.record.fields["Units to Bring"])) {
+      await larkDelete(recUrl(appToken, CFG.tblItems, `/${iid}`));
+    }
+  }
+  const up = await larkPut(recUrl(appToken, CFG.tblShoots, `/${id}`), { fields });
+  if (up.code !== 0) throw new Error(`edit shoot failed: ${up.code} ${up.msg}`);
+  for (const it of items) {
+    const ir = await larkPost(recUrl(appToken, CFG.tblItems), {
+      fields: { "Product": [it.id], "Quantity": Number(it.qty) || 0, "Shoot": [id] },
+    });
+    if (ir.code !== 0) throw new Error(`create item failed: ${ir.code} ${ir.msg}`);
+  }
+  return { id };
+}
+
 // Log a delivery -> the Product's "Total Received" rollup rises -> stock rises.
 async function createDelivery(body) {
   const { productId, productName, qty, date } = body || {};
@@ -400,6 +453,15 @@ const server = http.createServer(async (req, res) => {
     if (url === "/api/shoots" && req.method === "POST") {
       const body = await readBody(req);
       const out = await createShoot(body);
+      return sendJson(res, 200, { ok: true, ...out });
+    }
+    if (url === "/api/shoots/items" && req.method === "GET") {
+      const id = new URL(req.url, "http://x").searchParams.get("id");
+      const items = await getShootItems(id);
+      return sendJson(res, 200, { ok: true, items });
+    }
+    if (url === "/api/shoots/edit" && req.method === "POST") {
+      const out = await editShoot(await readBody(req));
       return sendJson(res, 200, { ok: true, ...out });
     }
     if (url === "/api/shoots/update" && req.method === "POST") {
