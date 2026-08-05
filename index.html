@@ -395,7 +395,9 @@
   const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
   const pad=n=>String(n).padStart(2,'0');
   const esc=t=>String(t==null?'':t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  const keyFromMs=ms=>{const d=new Date(ms);return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`;};
+  // Shoot dates are stored as timestamps; shift to Manila (UTC+8) so the calendar
+  // date matches exactly what Lark shows, regardless of how each record was saved.
+  const keyFromMs=ms=>{const d=new Date(ms+8*3600*1000);return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`;};
   const todayKey=()=>{const d=new Date();return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;};
   const keyOf=(y,m,day)=>`${y}-${pad(m+1)}-${pad(day)}`;
   const prettyDay=key=>{const [y,m,d]=key.split('-').map(Number);return `${MONTHS[m-1].slice(0,3)} ${d}`;};
@@ -429,7 +431,6 @@
     const days=new Date(Date.UTC(calY,calM+1,0)).getUTCDate();
     const tKey=todayKey();
     let html='';
-    for(let i=0;i<first;i++) html+='<div class="daycell empty"></div>';
     for(let d=1;d<=days;d++){
       const key=keyOf(calY,calM,d);
       const list=shootsOn(key);
@@ -438,7 +439,9 @@
       if(key===calSelKey) cls.push('sel');
       let chips=list.slice(0,2).map(s=>`<div class="sh"><div class="c">${esc(s.talent||'(no name)')}</div><div class="l">${esc(s.address||'')}</div></div>`).join('');
       if(list.length>2) chips+=`<div class="moren">+${list.length-2} more</div>`;
-      html+=`<div class="${cls.join(' ')}" data-key="${key}"><div class="dnum">${d}</div>${chips}</div>`;
+      // Offset the 1st day into the correct weekday column (no empty spacer cells).
+      const gcs=d===1?` style="grid-column-start:${first+1}"`:'';
+      html+=`<div class="${cls.join(' ')}" data-key="${key}"${gcs}><div class="dnum">${d}</div>${chips}</div>`;
     }
     grid.innerHTML=html;
     renderSide();
