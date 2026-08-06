@@ -28,9 +28,9 @@ const CFG = {
   webhook: process.env.LARK_WEBHOOK_URL || "https://open.larksuite.com/open-apis/bot/v2/hook/3321f7f7-f822-425a-ba8b-0c809e1d2f46",
   // Lark user_id to add as a guest on every shoot event, so it shows on their own calendar.
   ownerUserId: process.env.OWNER_USER_ID || "7630661617520234007",
-  // Shared-calendar sync is OFF: shoots go on the user's personal calendar via a Lark
-  // automation instead (always visible without subscribing). Set CALENDAR_SYNC=on to re-enable.
-  calendarSync: process.env.CALENDAR_SYNC === "on",
+  // Shared-calendar sync (create/move/delete events on the hiessence PR Shoots calendar).
+  // Set CALENDAR_SYNC=off to disable.
+  calendarSync: process.env.CALENDAR_SYNC !== "off",
 };
 
 // ---- Lark API helpers -------------------------------------------------------
