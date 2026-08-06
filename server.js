@@ -28,6 +28,9 @@ const CFG = {
   webhook: process.env.LARK_WEBHOOK_URL || "https://open.larksuite.com/open-apis/bot/v2/hook/3321f7f7-f822-425a-ba8b-0c809e1d2f46",
   // Lark user_id to add as a guest on every shoot event, so it shows on their own calendar.
   ownerUserId: process.env.OWNER_USER_ID || "7630661617520234007",
+  // Shared-calendar sync is OFF: shoots go on the user's personal calendar via a Lark
+  // automation instead (always visible without subscribing). Set CALENDAR_SYNC=on to re-enable.
+  calendarSync: process.env.CALENDAR_SYNC === "on",
 };
 
 // ---- Lark API helpers -------------------------------------------------------
@@ -303,7 +306,7 @@ function eventBody({ dateMs, timeText, talent, address, unitsText }) {
 
 // Add the owner (Pol) as a guest on an event so it appears on their own calendar.
 async function addOwnerGuest(calId, eventId) {
-  if (!eventId || !CFG.ownerUserId) return;
+  if (!eventId || !CFG.ownerUserId || !CFG.calendarSync) return;
   try {
     await larkPost(
       `${CFG.domain}/open-apis/calendar/v4/calendars/${calId}/events/${eventId}/attendees?user_id_type=user_id`,
@@ -314,6 +317,7 @@ async function addOwnerGuest(calId, eventId) {
 
 // Create a calendar event for a shoot; returns the event id (or null on failure).
 async function createShootEvent(info) {
+  if (!CFG.calendarSync) return null;
   try {
     const calId = await ensureShootCalendar();
     const r = await larkPost(`${CFG.domain}/open-apis/calendar/v4/calendars/${calId}/events`, eventBody(info));
@@ -328,7 +332,7 @@ async function createShootEvent(info) {
 
 // Move/update an existing shoot event (non-fatal on any error).
 async function updateShootEvent(eventId, info) {
-  if (!eventId) return;
+  if (!eventId || !CFG.calendarSync) return;
   try {
     const calId = await ensureShootCalendar();
     await larkPatch(`${CFG.domain}/open-apis/calendar/v4/calendars/${calId}/events/${eventId}`, eventBody(info));
@@ -337,7 +341,7 @@ async function updateShootEvent(eventId, info) {
 
 // Remove a shoot event (non-fatal on any error).
 async function deleteShootEvent(eventId) {
-  if (!eventId) return;
+  if (!eventId || !CFG.calendarSync) return;
   try {
     const calId = await ensureShootCalendar();
     await larkDelete(`${CFG.domain}/open-apis/calendar/v4/calendars/${calId}/events/${eventId}`);
