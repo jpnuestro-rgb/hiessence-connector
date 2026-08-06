@@ -26,6 +26,8 @@ const CFG = {
   tblDeliveries: process.env.TABLE_DELIVERIES || "tblwYjnDfU2p69MZ",
   // Custom bot webhook for the "Creative Department [Content]" group chat.
   webhook: process.env.LARK_WEBHOOK_URL || "https://open.larksuite.com/open-apis/bot/v2/hook/3321f7f7-f822-425a-ba8b-0c809e1d2f46",
+  // Lark user_id to add as a guest on every shoot event, so it shows on their own calendar.
+  ownerUserId: process.env.OWNER_USER_ID || "7630661617520234007",
 };
 
 // ---- Lark API helpers -------------------------------------------------------
@@ -299,12 +301,27 @@ function eventBody({ dateMs, timeText, talent, address, unitsText }) {
   return body;
 }
 
+// Add the owner (Pol) as a guest on an event so it appears on their own calendar.
+async function addOwnerGuest(calId, eventId) {
+  if (!eventId || !CFG.ownerUserId) return;
+  try {
+    await larkPost(
+      `${CFG.domain}/open-apis/calendar/v4/calendars/${calId}/events/${eventId}/attendees?user_id_type=user_id`,
+      { attendees: [{ type: "user", user_id: CFG.ownerUserId }], need_notification: false }
+    );
+  } catch (_) { /* non-fatal */ }
+}
+
 // Create a calendar event for a shoot; returns the event id (or null on failure).
 async function createShootEvent(info) {
   try {
     const calId = await ensureShootCalendar();
     const r = await larkPost(`${CFG.domain}/open-apis/calendar/v4/calendars/${calId}/events`, eventBody(info));
-    if (r.code === 0 && r.data && r.data.event) return r.data.event.event_id;
+    if (r.code === 0 && r.data && r.data.event) {
+      const eventId = r.data.event.event_id;
+      await addOwnerGuest(calId, eventId);
+      return eventId;
+    }
   } catch (_) { /* non-fatal */ }
   return null;
 }
@@ -676,10 +693,11 @@ const server = http.createServer(async (req, res) => {
     // One-time (idempotent) backfill: put existing shoots onto the shared calendar.
     // Only creates an event for shoots that don't already have a "Calendar Event ID".
     if (url === "/api/calendar/backfill") {
-      const out = { created: [], skipped: 0 };
+      const out = { created: [], guested: [], skipped: 0 };
       try {
         const appToken = await baseAppToken();
         await ensureEventIdField();
+        const calId = await ensureShootCalendar();
         let pageToken = "";
         do {
           const suffix = `?page_size=100${pageToken ? `&page_token=${pageToken}` : ""}`;
@@ -687,19 +705,25 @@ const server = http.createServer(async (req, res) => {
           if (j.code !== 0) { out.err = `list failed: ${j.code} ${j.msg}`; break; }
           for (const rec of j.data.items || []) {
             const f = rec.fields || {};
-            const existing = readText(f["Calendar Event ID"]);
+            let eventId = readText(f["Calendar Event ID"]);
             const dateMs = readDateMs(f["Shoot Date"]);
-            if (existing || !dateMs) { out.skipped++; continue; }
-            const eventId = await createShootEvent({
-              dateMs,
-              timeText: readText(f["Shoot Time"]),
-              talent: readText(f["Talent Name"]),
-              address: readText(f["Address"]),
-              unitsText: readText(f["Units Text"]),
-            });
-            if (eventId) {
-              await larkPut(recUrl(appToken, CFG.tblShoots, `/${rec.record_id}`), { fields: { "Calendar Event ID": eventId } });
-              out.created.push(readText(f["Talent Name"]) || rec.record_id);
+            if (!dateMs) { out.skipped++; continue; }
+            if (!eventId) {
+              eventId = await createShootEvent({
+                dateMs,
+                timeText: readText(f["Shoot Time"]),
+                talent: readText(f["Talent Name"]),
+                address: readText(f["Address"]),
+                unitsText: readText(f["Units Text"]),
+              });
+              if (eventId) {
+                await larkPut(recUrl(appToken, CFG.tblShoots, `/${rec.record_id}`), { fields: { "Calendar Event ID": eventId } });
+                out.created.push(readText(f["Talent Name"]) || rec.record_id);
+              }
+            } else {
+              // Event already exists — just make sure the owner is a guest on it.
+              await addOwnerGuest(calId, eventId);
+              out.guested.push(readText(f["Talent Name"]) || rec.record_id);
             }
           }
           pageToken = j.data.has_more ? j.data.page_token : "";
