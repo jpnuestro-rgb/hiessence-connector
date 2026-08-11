@@ -88,6 +88,9 @@
   .stepbtns button:disabled{color:#c4ccc5;cursor:not-allowed;background:transparent}
   .qty{min-width:34px;text-align:center;font-size:15px;font-weight:700}
   .qty.zero{color:#bcc4bd;font-weight:500}
+  .qtyin{width:44px;text-align:center;font-size:15px;font-weight:700;border:none;background:transparent;color:var(--ink);font-family:inherit;padding:0;-moz-appearance:textfield}
+  .qtyin::-webkit-outer-spin-button,.qtyin::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  .qtyin:focus{outline:none;background:#fff}
   .leftnote{font-size:11px;color:var(--muted)} .leftnote b{color:var(--ink)}
   .state,.empty{grid-column:1/-1;text-align:center;color:var(--muted);padding:34px 20px;font-size:13.5px;line-height:1.6}
 
@@ -422,18 +425,25 @@
   let dlFilterCat='all', dlQ='';
   const dlCardsEl=document.getElementById('dlCards');
   const dlVisible=()=>P.filter(p=>(dlFilterCat==='all'||p.cat===dlFilterCat)&&p.name.toLowerCase().includes(dlQ));
+  function dlNote(p){return (p.recv||0)>0?`New: <b>${p.stock+(p.recv||0)}</b>`:`Stock: <b>${p.stock}</b>`;}
   function renderDlCards(){
     if(!P.length){return;}
     const list=dlVisible();
     if(!list.length){dlCardsEl.innerHTML='<div class="empty">No matching products.</div>';return;}
     dlCardsEl.innerHTML=list.map(p=>{const recv=p.recv||0;const img=p.image?`<img src="${p.image}" alt="" loading="lazy" onerror="this.remove()">`:'';
-      const note=recv>0?`New: <b>${p.stock+recv}</b>`:`Stock: <b>${p.stock}</b>`;
       return `<div class="card ${recv>0?'sel':''}" data-id="${p.id}"><div class="thumb"><span class="badge">${CATLABEL[p.cat]}</span><span class="stockpill ${p.stock<=0?'low':''}">Stock ${p.stock}</span>${ICONS[p.cat]}${img}</div>
-      <div class="cbody"><div class="pname">${esc(p.name)}</div><div class="stepper"><div class="stepbtns"><button data-act="minus" ${recv<=0?'disabled':''}>&minus;</button><span class="qty ${recv===0?'zero':''}">${recv>0?'+'+recv:0}</span><button data-act="plus">+</button></div><div class="leftnote">${note}</div></div></div></div>`;
+      <div class="cbody"><div class="pname">${esc(p.name)}</div><div class="stepper"><div class="stepbtns"><button data-act="minus" ${recv<=0?'disabled':''}>&minus;</button><input class="qtyin" type="number" inputmode="numeric" min="0" step="1" value="${recv}" aria-label="Units received"><button data-act="plus">+</button></div><div class="leftnote">${dlNote(p)}</div></div></div></div>`;
     }).join('');
   }
+  function dlSyncCard(id){const card=dlCardsEl.querySelector('.card[data-id="'+id+'"]');if(!card)return;const p=P.find(x=>x.id===id);if(!p)return;const recv=p.recv||0;
+    card.classList.toggle('sel',recv>0);const inp=card.querySelector('.qtyin');if(inp&&document.activeElement!==inp)inp.value=recv;
+    const minus=card.querySelector('[data-act="minus"]');if(minus)minus.disabled=recv<=0;const note=card.querySelector('.leftnote');if(note)note.innerHTML=dlNote(p);}
   dlCardsEl.addEventListener('click',e=>{const btn=e.target.closest('button');if(!btn)return;const card=e.target.closest('.card');if(!card)return;const p=P.find(x=>x.id===card.dataset.id);if(!p)return;
-    p.recv=p.recv||0;if(btn.dataset.act==='plus')p.recv++;if(btn.dataset.act==='minus'&&p.recv>0)p.recv--;renderDlCards();updateDlBar();});
+    p.recv=p.recv||0;if(btn.dataset.act==='plus')p.recv++;if(btn.dataset.act==='minus'&&p.recv>0)p.recv--;dlSyncCard(p.id);updateDlBar();});
+  dlCardsEl.addEventListener('input',e=>{const inp=e.target.closest('.qtyin');if(!inp)return;const card=e.target.closest('.card');if(!card)return;const p=P.find(x=>x.id===card.dataset.id);if(!p)return;
+    let v=parseInt(inp.value,10);if(!Number.isFinite(v)||v<0)v=0;p.recv=v;
+    card.classList.toggle('sel',v>0);const minus=card.querySelector('[data-act="minus"]');if(minus)minus.disabled=v<=0;const note=card.querySelector('.leftnote');if(note)note.innerHTML=dlNote(p);updateDlBar();});
+  dlCardsEl.addEventListener('blur',e=>{const inp=e.target.closest&&e.target.closest('.qtyin');if(!inp)return;const card=e.target.closest('.card');if(!card)return;const p=P.find(x=>x.id===card.dataset.id);if(!p)return;let v=parseInt(inp.value,10);if(!Number.isFinite(v)||v<0)v=0;p.recv=v;inp.value=v;},true);
   document.getElementById('dlTabs').addEventListener('click',e=>{const t=e.target.closest('.tab');if(!t)return;document.querySelectorAll('#dlTabs .tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');dlFilterCat=t.dataset.cat;renderDlCards();});
   document.getElementById('dlSearch').addEventListener('input',e=>{dlQ=e.target.value.toLowerCase();renderDlCards();});
   function updateDlBar(){const sel=P.filter(p=>(p.recv||0)>0);const units=sel.reduce((s,p)=>s+p.recv,0);

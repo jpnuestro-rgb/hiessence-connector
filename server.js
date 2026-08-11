@@ -296,11 +296,15 @@ function eventTimes(dateMs, timeText) {
   };
 }
 
+// Alerts before each shoot: 2 days and 1 day before (in minutes before start).
+const SHOOT_REMINDERS = [2 * 24 * 60, 1 * 24 * 60];
+
 function eventBody({ dateMs, timeText, talent, address, unitsText }) {
   const t = eventTimes(dateMs, timeText);
   const body = { summary: talent || "PR Shoot", start_time: t.start_time, end_time: t.end_time };
   body.description = unitsText ? `Units to bring:\n${unitsText}` : "";
   if (address) body.location = { name: address };
+  body.reminders = SHOOT_REMINDERS.map((minutes) => ({ minutes })); // 2-day & 1-day-before alerts
   return body;
 }
 
