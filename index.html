@@ -285,6 +285,13 @@
       <div class="view" id="v-deliveries">
         <h1 class="title">Deliveries</h1>
         <p class="lead">Set how many units arrived with &minus; / +, then add them to stock. Every change is logged.</p>
+        <div class="section"><h2>Delivery details</h2>
+          <div class="grid2">
+            <div class="field"><label class="f">Received by</label><input id="dlReceivedBy" placeholder="Who received it"></div>
+            <div class="field"><label class="f">From / Supplier</label><input id="dlFrom" placeholder="Where it came from (e.g. Pasig warehouse)"></div>
+            <div class="field"><label class="f">Date received</label><input id="dlDate" type="date" onclick="this.showPicker&&this.showPicker()"></div>
+          </div>
+        </div>
         <div class="section"><h2>Add stock</h2>
           <div class="toolbar">
             <div class="tabs" id="dlTabs"><div class="tab active" data-cat="all">All</div><div class="tab" data-cat="diffuser">Diffusers</div><div class="tab" data-cat="oil">Aroma Oils</div><div class="tab" data-cat="kit">Kits &amp; Sets</div></div>
@@ -451,15 +458,18 @@
     document.getElementById('dlAddBtn').disabled=units<=0;}
   function renderDeliveries(){const el=document.getElementById('dlList');
     if(!D.length){el.innerHTML='<div class="calnote">No deliveries logged yet.</div>';return;}
-    el.innerHTML=D.slice(0,20).map(d=>`<div class="drow"><div><b>${esc(d.product||'')}</b> <span class="plus">+${d.qty}</span></div><div class="sub">${d.date?prettyMs(d.date):''}</div></div>`).join('');}
+    el.innerHTML=D.slice(0,20).map(d=>{const meta=[d.from?'from '+esc(d.from):'',d.receivedBy?'received by '+esc(d.receivedBy):''].filter(Boolean).join(' · ');
+      return `<div class="drow"><div><b>${esc(d.product||'')}</b> <span class="plus">+${d.qty}</span>${meta?`<div class="sub">${meta}</div>`:''}</div><div class="sub">${d.date?prettyMs(d.date):''}</div></div>`;}).join('');}
   const dlAddBtn=document.getElementById('dlAddBtn');
   dlAddBtn.addEventListener('click',async()=>{const sel=P.filter(p=>(p.recv||0)>0);const units=sel.reduce((s,p)=>s+p.recv,0);if(!units)return;
-    const ok=await confirmModal('Add to stock?',`${units} unit${units===1?'':'s'} across ${sel.length} product${sel.length===1?'':'s'} will be logged as delivered today.`,'Yes, add');
+    const ok=await confirmModal('Add to stock?',`${units} unit${units===1?'':'s'} across ${sel.length} product${sel.length===1?'':'s'} will be logged as a delivery.`,'Yes, add');
     if(!ok)return;
     dlAddBtn.disabled=true;dlAddBtn.textContent='Adding…';
-    const today=todayKey();const failed=[];
+    const dv=id=>{const el=document.getElementById(id);return el?el.value.trim():'';};
+    const date=dv('dlDate')||todayKey();const receivedBy=dv('dlReceivedBy'),from=dv('dlFrom');
+    const failed=[];
     for(const p of sel){
-      try{const r=await fetch('/api/deliveries',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({productId:p.id,productName:p.name,qty:p.recv,date:today})});
+      try{const r=await fetch('/api/deliveries',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({productId:p.id,productName:p.name,qty:p.recv,date,receivedBy,from})});
         const j=await r.json();if(!j.ok)throw new Error(j.error||'failed');
         p.stock+=p.recv; // optimistic
       }catch(e){failed.push(p.name);}
@@ -546,7 +556,7 @@
     window.scrollTo(0,0);
     if(v==='new'){await ensureProducts();renderCards();updateBar();}
     if(v==='stocks'){await ensureProducts();renderStocks();}
-    if(v==='deliveries'){await ensureProducts();P.forEach(p=>p.recv=0);renderDlCards();updateDlBar();await loadDeliveries();renderDeliveries();}
+    if(v==='deliveries'){await ensureProducts();P.forEach(p=>p.recv=0);const dd=document.getElementById('dlDate');if(dd&&!dd.value)dd.value=todayKey();renderDlCards();updateDlBar();await loadDeliveries();renderDeliveries();}
     if(v==='cal'){await loadShoots();renderCal();}
     if(v==='dash'||v==='insights'){await ensureProducts();await loadShoots();await loadDeliveries();renderDash();}
   }

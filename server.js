@@ -499,6 +499,8 @@ async function getDeliveries() {
         product: readText(f["Product"]),
         qty: readNumber(f["Quantity Received"]),
         date: readDateMs(f["Date Received"]),
+        receivedBy: readText(f["Received By"]),
+        from: readText(f["From"]),
       });
     }
     pageToken = j.data.has_more ? j.data.page_token : "";
@@ -649,15 +651,35 @@ async function editShoot(body) {
   return { id };
 }
 
+// Make sure the Deliveries table has the optional detail fields (all text).
+let _deliveryFieldsReady = false;
+async function ensureDeliveryFields() {
+  if (_deliveryFieldsReady) return;
+  try {
+    const appToken = await baseAppToken();
+    const j = await larkGet(`${CFG.domain}/open-apis/bitable/v1/apps/${appToken}/tables/${CFG.tblDeliveries}/fields?page_size=200`);
+    if (j.code === 0 && j.data) {
+      const have = new Set((j.data.items || []).map((f) => f.field_name));
+      for (const name of ["Received By", "From"]) {
+        if (!have.has(name)) {
+          await larkPost(`${CFG.domain}/open-apis/bitable/v1/apps/${appToken}/tables/${CFG.tblDeliveries}/fields`, { field_name: name, type: 1 });
+        }
+      }
+      _deliveryFieldsReady = true;
+    }
+  } catch (_) { /* non-fatal: detail fields are best-effort */ }
+}
+
 // Log a delivery -> the Product's "Total Received" rollup rises -> stock rises.
 async function createDelivery(body) {
-  const { productId, productName, qty, date } = body || {};
+  const { productId, productName, qty, date, receivedBy, from } = body || {};
   const q = Number(qty) || 0;
   if (!productId || q <= 0) {
     const err = new Error("Pick a product and a quantity greater than 0.");
     err.status = 400;
     throw err;
   }
+  await ensureDeliveryFields();
   const appToken = await baseAppToken();
   const fields = {
     "Delivery No.": `${productName || "Stock-in"} ×${q}`,
@@ -665,6 +687,10 @@ async function createDelivery(body) {
     "Quantity Received": q,
   };
   if (date) fields["Date Received"] = new Date(`${date}T00:00:00`).getTime();
+  if (_deliveryFieldsReady) {
+    if (receivedBy) fields["Received By"] = String(receivedBy);
+    if (from) fields["From"] = String(from);
+  }
   const res = await larkPost(recUrl(appToken, CFG.tblDeliveries), { fields });
   if (res.code !== 0) throw new Error(`create delivery failed: ${res.code} ${res.msg}`);
   return { id: res.data.record.record_id };
