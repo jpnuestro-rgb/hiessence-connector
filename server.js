@@ -12,6 +12,7 @@ import http from "http";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import crypto from "crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -698,6 +699,63 @@ async function createDelivery(body) {
 
 // ---- HTTP plumbing ----------------------------------------------------------
 
+// ---- Simple passcode gate (active only when APP_PASSCODE is set) -------------
+const AUTH_PASS = process.env.APP_PASSCODE || "";
+const COOKIE_NAME = "hc_session";
+const SESSION_TTL_MS = 30 * 24 * 3600 * 1000; // 30 days
+const SESSION_SECRET =
+  process.env.SESSION_SECRET ||
+  crypto.createHash("sha256").update("hiessence|" + AUTH_PASS + "|" + (CFG.appSecret || "")).digest("hex");
+
+const b64url = (buf) => Buffer.from(buf).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+function signSession(exp) {
+  const body = b64url(JSON.stringify({ exp }));
+  const sig = b64url(crypto.createHmac("sha256", SESSION_SECRET).update(body).digest());
+  return body + "." + sig;
+}
+function validSession(token) {
+  if (!token || token.indexOf(".") < 0) return false;
+  const [body, sig] = token.split(".");
+  const expect = b64url(crypto.createHmac("sha256", SESSION_SECRET).update(body).digest());
+  if (sig.length !== expect.length) return false;
+  if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expect))) return false;
+  try {
+    const p = JSON.parse(Buffer.from(body.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString());
+    return p.exp > Date.now();
+  } catch { return false; }
+}
+function getCookie(req, name) {
+  const m = (req.headers.cookie || "").match(new RegExp("(?:^|; )" + name + "=([^;]*)"));
+  return m ? decodeURIComponent(m[1]) : "";
+}
+function isAuthed(req) {
+  if (!AUTH_PASS) return true; // gate disabled until a passcode is configured
+  return validSession(getCookie(req, COOKIE_NAME));
+}
+function passOk(input) {
+  if (!AUTH_PASS) return false;
+  const a = Buffer.from(String(input || "")), b = Buffer.from(AUTH_PASS);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+const readRaw = (req) => new Promise((resolve) => { let d = ""; req.on("data", (c) => (d += c)); req.on("end", () => resolve(d)); });
+function loginPage(res, err) {
+  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>hiess&#234;nce &middot; Sign in</title>
+<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:#f4f6f1;color:#1e2530;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{background:#fff;border:1px solid #eef1ee;border-radius:20px;box-shadow:0 1px 2px rgba(30,40,50,.04),0 12px 30px rgba(30,40,50,.06);padding:34px 30px;max-width:360px;width:100%}
+.mark{font-weight:700;font-size:20px;letter-spacing:-.01em;margin-bottom:4px}.sub{color:#7c8598;font-size:14px;margin-bottom:22px}
+label{display:block;font-size:12px;color:#7c8598;margin-bottom:6px;font-weight:500}
+input{width:100%;padding:12px 14px;border:1px solid #e6ebe6;border-radius:11px;font-size:15px;background:#f8faf7;font-family:inherit;margin-bottom:14px}
+input:focus{outline:none;border-color:#2fa75a;background:#fff;box-shadow:0 0 0 3px rgba(47,167,90,.18)}
+button{width:100%;background:#2fa75a;color:#fff;border:none;padding:12px;border-radius:11px;font-size:15px;font-weight:600;cursor:pointer}button:hover{background:#26934e}
+.err{color:#d9663f;font-size:13px;margin:-4px 0 12px}</style></head>
+<body><form class="card" method="POST" action="/api/login">
+<div class="mark">hiess&#234;nce</div><div class="sub">Enter the team passcode to continue.</div>
+${err ? `<p class="err">${err}</p>` : ""}<label>Passcode</label><input type="password" name="passcode" autofocus autocomplete="current-password">
+<button type="submit">Sign in</button></form></body></html>`;
+  res.writeHead(err ? 401 : 200, { "Content-Type": "text/html" });
+  res.end(html);
+}
+
 function serveIndex(res) {
   fs.readFile(path.join(__dirname, "index.html"), (err, data) => {
     if (err) { res.writeHead(500); return res.end("index.html missing"); }
@@ -723,6 +781,33 @@ const server = http.createServer(async (req, res) => {
   try {
     if (url === "/api/health") {
       return sendJson(res, 200, { ok: true, appIdSet: !!CFG.appId, secretSet: !!CFG.appSecret, domain: CFG.domain });
+    }
+    // ---- auth (open) routes ----
+    if (url === "/login" && req.method === "GET") return loginPage(res, "");
+    if (url === "/api/login" && req.method === "POST") {
+      const raw = await readRaw(req);
+      let passcode = "";
+      if (raw.trim().startsWith("{")) { try { passcode = JSON.parse(raw).passcode; } catch { /* ignore */ } }
+      else passcode = new URLSearchParams(raw).get("passcode") || "";
+      if (passOk(passcode)) {
+        const token = signSession(Date.now() + SESSION_TTL_MS);
+        res.writeHead(302, {
+          "Set-Cookie": `${COOKIE_NAME}=${encodeURIComponent(token)}; HttpOnly; Path=/; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}; SameSite=Lax; Secure`,
+          "Location": "/",
+        });
+        return res.end();
+      }
+      return loginPage(res, "Wrong passcode. Try again.");
+    }
+    if (url === "/logout") {
+      res.writeHead(302, { "Set-Cookie": `${COOKIE_NAME}=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax; Secure`, "Location": "/login" });
+      return res.end();
+    }
+    // ---- everything below requires a valid session (when a passcode is set) ----
+    if (!isAuthed(req)) {
+      if (url.startsWith("/api/")) return sendJson(res, 401, { ok: false, error: "auth" });
+      res.writeHead(302, { "Location": "/login" });
+      return res.end();
     }
     // One-time (idempotent) backfill: put existing shoots onto the shared calendar.
     // Only creates an event for shoots that don't already have a "Calendar Event ID".
