@@ -112,6 +112,16 @@
   .pill{font-size:12px;font-weight:700;padding:4px 11px;border-radius:999px;background:var(--goodbg);color:var(--good-ink);display:inline-block;white-space:nowrap}
   .pill.low{background:var(--warnbg);color:var(--warn)}
 
+  /* low-stock banner */
+  .banner{display:flex;align-items:center;gap:12px;background:var(--warnbg);border:1px solid #f0dcbb;border-radius:14px;padding:14px 18px;margin-bottom:18px;font-size:13.5px;color:#8a5a1a;line-height:1.45}
+  .banner b{color:#7a4d12}
+  .banner .link{margin-left:auto;color:var(--good-ink);white-space:nowrap}
+  /* stock-out remove button (red) + void chips */
+  #soRemoveBtn{background:var(--danger)} #soRemoveBtn:hover{background:#c94636} #soRemoveBtn:disabled{background:#cdd6ce}
+  .minus{color:var(--warn);font-weight:700}
+  .mini.void{color:var(--danger);border-color:#f0cfca} .mini.void:hover{background:var(--dangerbg)}
+  .drowr{display:flex;align-items:center;gap:12px}
+
   /* rows / dashboard */
   .drow{display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-top:1px solid var(--line);font-size:14px}
   .drow:first-child{border-top:none}
@@ -203,8 +213,10 @@
     <div class="navlabel">Inventory</div>
     <div class="navitem" data-view="stocks"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg> Stocks <span class="count" id="lowCount"></span></div>
     <div class="navitem" data-view="deliveries"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M16 3h5v13H3V3h5M8 3v6l2-1.5L12 9V3"/><path d="M3 16l4 5h10l4-5"/></svg> Deliveries</div>
+    <div class="navitem" data-view="stockout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><path d="M8 12h8"/></svg> Stock Out</div>
     <div class="navlabel">Tools</div>
     <div class="navitem" data-view="insights"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg> Insights</div>
+    <div class="navitem" data-view="reports"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg> Reports</div>
     <a href="/logout" class="signout">Sign out</a>
   </aside>
 
@@ -278,6 +290,7 @@
       <div class="view" id="v-stocks">
         <h1 class="title">Stocks</h1>
         <p class="lead">Live inventory from Lark. Low or zero stock is shown in red; add stock from Deliveries.</p>
+        <div id="lowBanner"></div>
         <div class="section"><h2>Inventory</h2>
           <div class="search" style="margin-bottom:14px;max-width:280px"><input id="stockSearch" placeholder="Search product…"></div>
           <div style="overflow-x:auto"><table><thead><tr><th>Product</th><th>Category</th><th>On hand</th></tr></thead><tbody id="stockRows"><tr><td colspan="3" class="pcat">Loading…</td></tr></tbody></table></div>
@@ -305,6 +318,39 @@
         <div class="section"><h2>Recent deliveries</h2><div id="dlList"><div class="calnote">Loading…</div></div></div>
       </div>
 
+      <!-- STOCK OUT -->
+      <div class="view" id="v-stockout">
+        <h1 class="title">Stock Out</h1>
+        <p class="lead">Remove stock that was used, damaged, or corrected — set how many with &minus; / +, pick a reason, and log it. Every change is tracked and reversible.</p>
+        <div class="section"><h2>Reason &amp; details</h2>
+          <div class="grid2">
+            <div class="field"><label class="f">Reason <span class="req">*</span></label><select id="soReason"><option value="">Select…</option><option>Shoot</option><option>Damaged</option><option>Sample / Giveaway</option><option>Sold</option><option>Correction</option><option>Other</option></select></div>
+            <div class="field"><label class="f">Taken by</label><input id="soBy" placeholder="Who took it out (optional)"></div>
+            <div class="field"><label class="f">Date <span class="req">*</span></label><input id="soDate" type="date" onclick="this.showPicker&&this.showPicker()"></div>
+          </div>
+        </div>
+        <div class="section"><h2>Remove stock</h2>
+          <div class="toolbar">
+            <div class="tabs" id="soTabs"><div class="tab active" data-cat="all">All</div><div class="tab" data-cat="diffuser">Diffusers</div><div class="tab" data-cat="oil">Aroma Oils</div><div class="tab" data-cat="kit">Kits &amp; Sets</div></div>
+            <div class="search"><input id="soSearch" placeholder="Search product…"></div>
+          </div>
+          <div class="cards" id="soCards"><div class="state">Loading products from Lark…</div></div>
+        </div>
+        <div class="section"><h2>Recent stock-outs</h2><div id="soList"><div class="calnote">Loading…</div></div></div>
+      </div>
+
+      <!-- REPORTS -->
+      <div class="view" id="v-reports">
+        <h1 class="title">Reports</h1>
+        <p class="lead">Monthly stock movement — deliveries in, stock out, and the net change per product. Export any month to CSV.</p>
+        <div class="section">
+          <div class="calhead"><button class="calnav" id="repPrev">&lsaquo;</button><div class="m" id="repMonth"></div><button class="calnav" id="repNext">&rsaquo;</button></div>
+          <div class="tiles" id="repTiles" style="margin-bottom:18px"></div>
+          <div style="display:flex;justify-content:flex-end;margin-bottom:14px"><button class="btn dark" id="repExport">&darr; Export CSV</button></div>
+          <div style="overflow-x:auto"><table><thead><tr><th>Product</th><th>In</th><th>Out</th><th>Net</th></tr></thead><tbody id="repRows"><tr><td colspan="4" class="pcat">Loading…</td></tr></tbody></table></div>
+        </div>
+      </div>
+
       <!-- INSIGHTS -->
       <div class="view" id="v-insights">
         <h1 class="title">Insights</h1>
@@ -320,6 +366,8 @@
 <div class="bar" id="bar"><div class="barin"><div class="summ"><b id="totalUnits">0</b> units · <span id="totalItems">0</span> products<span id="hint" style="color:var(--warn)"></span></div><button class="btn" id="createBtn" disabled>Create PR Shoot →</button></div></div>
 <!-- STICKY BAR (Deliveries) -->
 <div class="bar" id="dlbar"><div class="barin"><div class="summ"><b id="dlTotalUnits">0</b> units · <span id="dlTotalItems">0</span> products to add<span id="dlHint" style="color:var(--warn)"></span></div><button class="btn" id="dlAddBtn" disabled>+ Add to stock</button></div></div>
+<!-- STICKY BAR (Stock Out) -->
+<div class="bar" id="sobar"><div class="barin"><div class="summ"><b id="soTotalUnits">0</b> units · <span id="soTotalItems">0</span> products to remove<span id="soHint" style="color:var(--warn)"></span></div><button class="btn" id="soRemoveBtn" disabled>&minus; Remove from stock</button></div></div>
 
 <!-- MODAL -->
 <div class="overlay" id="overlay"><div class="modal">
@@ -426,6 +474,9 @@
   // ---------- Stocks ----------
   let stockQ='';
   function renderStocks(){const rows=document.getElementById('stockRows');
+    const banner=document.getElementById('lowBanner');
+    if(banner){const low0=P.filter(isLow).slice().sort((a,b)=>a.stock-b.stock);
+      banner.innerHTML=low0.length?`<div class="banner"><span class="dot"></span><div><b>${low0.length}</b> product${low0.length===1?'':'s'} at or below reorder level — ${low0.slice(0,4).map(p=>esc(p.name)+' ('+p.stock+')').join(', ')}${low0.length>4?', +'+(low0.length-4)+' more':''}</div><span class="link" data-go="deliveries">Log delivery &rarr;</span></div>`:'';}
     const list=P.filter(p=>p.name.toLowerCase().includes(stockQ)).slice().sort((a,b)=>a.stock-b.stock);
     if(!list.length){rows.innerHTML='<tr><td colspan="3" class="pcat">No products.</td></tr>';return;}
     rows.innerHTML=list.map(p=>`<tr><td><b>${esc(p.name)}</b></td><td class="pcat">${CATLABEL[p.cat]}</td><td><span class="pill ${isLow(p)?'low':''}">${p.stock} left</span></td></tr>`).join('');
@@ -464,10 +515,10 @@
     document.getElementById('dlTotalUnits').textContent=units;document.getElementById('dlTotalItems').textContent=sel.length;
     document.getElementById('dlAddBtn').disabled=!(units>0&&dlDetailsOk());
     const h=document.getElementById('dlHint');if(h)h.textContent=units<=0?' · pick at least 1 unit':(!dlDetailsOk()?' · fill Received by, From & Date':'');}
-  function renderDeliveries(){const el=document.getElementById('dlList');
-    if(!D.length){el.innerHTML='<div class="calnote">No deliveries logged yet.</div>';return;}
-    el.innerHTML=D.slice(0,20).map(d=>{const meta=[d.from?'from '+esc(d.from):'',d.receivedBy?'received by '+esc(d.receivedBy):''].filter(Boolean).join(' · ');
-      return `<div class="drow"><div><b>${esc(d.product||'')}</b> <span class="plus">+${d.qty}</span>${meta?`<div class="sub">${meta}</div>`:''}</div><div class="sub">${d.date?prettyMs(d.date):''}</div></div>`;}).join('');}
+  function renderDeliveries(){const el=document.getElementById('dlList');const ins=D.filter(d=>d.dir!=='out');
+    if(!ins.length){el.innerHTML='<div class="calnote">No deliveries logged yet.</div>';return;}
+    el.innerHTML=ins.slice(0,20).map(d=>{const meta=[d.from?'from '+esc(d.from):'',d.receivedBy?'received by '+esc(d.receivedBy):''].filter(Boolean).join(' · ');
+      return `<div class="drow"><div><b>${esc(d.product||'')}</b> <span class="plus">+${d.qty}</span>${meta?`<div class="sub">${meta}</div>`:''}</div><div class="drowr"><span class="sub">${d.date?prettyMs(d.date):''}</span><button class="mini void" data-void="${d.id}">Void</button></div></div>`;}).join('');}
   const dlAddBtn=document.getElementById('dlAddBtn');
   dlAddBtn.addEventListener('click',async()=>{const sel=P.filter(p=>(p.recv||0)>0);const units=sel.reduce((s,p)=>s+p.recv,0);if(!units)return;
     if(!dlDetailsOk()){modal(false,'Missing details','Fill in Received by, From, and Date first.');return;}
@@ -494,7 +545,7 @@
   function upcoming(){const t=todayKey();return S.filter(s=>keyFromMs(s.date)>=t).sort((a,b)=>a.date-b.date);}
   function renderDash(){
     const up=upcoming();const low=P.filter(isLow);const inStock=P.reduce((s,p)=>s+Math.max(0,p.stock),0);
-    const weekAgo=Date.now()-7*86400*1000;const delWk=D.filter(d=>d.date&&d.date>=weekAgo).length;
+    const weekAgo=Date.now()-7*86400*1000;const delWk=D.filter(d=>d.dir!=='out'&&d.date&&d.date>=weekAgo).length;
     const kpi=[['Upcoming shoots',up.length,''],['Low-stock items',low.length,low.length?'var(--warn)':''],['Units in stock',inStock,''],['Deliveries this week',delWk,'']];
     document.getElementById('kpis').innerHTML=kpi.map(k=>`<div class="tile"><div class="big" ${k[2]?`style="color:${k[2]}"`:''}>${k[1]}</div><div class="lbl">${k[0]}</div></div>`).join('');
     document.getElementById('insightTiles').innerHTML=document.getElementById('kpis').innerHTML;
@@ -550,8 +601,102 @@
   document.getElementById('calNext').addEventListener('click',()=>{calM++;if(calM>11){calM=0;calY++;}renderCal();});
   document.getElementById('calSearch').addEventListener('input',e=>{calQ=e.target.value;renderCal();});
 
+  // ---------- Stock Out (remove-stock cart) ----------
+  let soFilterCat='all', soQ='';
+  const soCardsEl=document.getElementById('soCards');
+  const soVisible=()=>P.filter(p=>(soFilterCat==='all'||p.cat===soFilterCat)&&p.name.toLowerCase().includes(soQ));
+  function soNote(p){const left=p.stock-(p.out||0);return (p.out||0)>0?`Left: <b>${left}</b>`:`Stock: <b>${p.stock}</b>`;}
+  function renderSoCards(){
+    if(!P.length){return;}
+    const list=soVisible();
+    if(!list.length){soCardsEl.innerHTML='<div class="empty">No matching products.</div>';return;}
+    soCardsEl.innerHTML=list.map(p=>{const out=p.out||0;const left=p.stock-out;const img=p.image?`<img src="${p.image}" alt="" loading="lazy" onerror="this.remove()">`:'';
+      return `<div class="card ${out>0?'sel':''}" data-id="${p.id}"><div class="thumb"><span class="badge">${CATLABEL[p.cat]}</span><span class="stockpill ${p.stock<=0?'low':''}">Stock ${p.stock}</span>${ICONS[p.cat]}${img}</div>
+      <div class="cbody"><div class="pname">${esc(p.name)}</div><div class="stepper"><div class="stepbtns"><button data-act="minus" ${out<=0?'disabled':''}>&minus;</button><input class="qtyin" type="number" inputmode="numeric" min="0" step="1" value="${out}" aria-label="Units to remove"><button data-act="plus" ${left<=0?'disabled':''}>+</button></div><div class="leftnote">${soNote(p)}</div></div></div></div>`;
+    }).join('');
+  }
+  function soSyncCard(id){const card=soCardsEl.querySelector('.card[data-id="'+id+'"]');if(!card)return;const p=P.find(x=>x.id===id);if(!p)return;const out=p.out||0;const left=p.stock-out;
+    card.classList.toggle('sel',out>0);const inp=card.querySelector('.qtyin');if(inp&&document.activeElement!==inp)inp.value=out;
+    const minus=card.querySelector('[data-act="minus"]');if(minus)minus.disabled=out<=0;const plus=card.querySelector('[data-act="plus"]');if(plus)plus.disabled=left<=0;const note=card.querySelector('.leftnote');if(note)note.innerHTML=soNote(p);}
+  soCardsEl.addEventListener('click',e=>{const btn=e.target.closest('button');if(!btn)return;const card=e.target.closest('.card');if(!card)return;const p=P.find(x=>x.id===card.dataset.id);if(!p)return;
+    p.out=p.out||0;if(btn.dataset.act==='plus'&&p.out<p.stock)p.out++;if(btn.dataset.act==='minus'&&p.out>0)p.out--;soSyncCard(p.id);updateSoBar();});
+  soCardsEl.addEventListener('input',e=>{const inp=e.target.closest('.qtyin');if(!inp)return;const card=e.target.closest('.card');if(!card)return;const p=P.find(x=>x.id===card.dataset.id);if(!p)return;
+    let v=parseInt(inp.value,10);if(!Number.isFinite(v)||v<0)v=0;if(v>p.stock)v=p.stock;p.out=v;
+    card.classList.toggle('sel',v>0);const minus=card.querySelector('[data-act="minus"]');if(minus)minus.disabled=v<=0;const plus=card.querySelector('[data-act="plus"]');if(plus)plus.disabled=(p.stock-v)<=0;const note=card.querySelector('.leftnote');if(note)note.innerHTML=soNote(p);updateSoBar();});
+  soCardsEl.addEventListener('blur',e=>{const inp=e.target.closest&&e.target.closest('.qtyin');if(!inp)return;const card=e.target.closest('.card');if(!card)return;const p=P.find(x=>x.id===card.dataset.id);if(!p)return;let v=parseInt(inp.value,10);if(!Number.isFinite(v)||v<0)v=0;if(v>p.stock)v=p.stock;p.out=v;inp.value=v;},true);
+  document.getElementById('soTabs').addEventListener('click',e=>{const t=e.target.closest('.tab');if(!t)return;document.querySelectorAll('#soTabs .tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');soFilterCat=t.dataset.cat;renderSoCards();});
+  document.getElementById('soSearch').addEventListener('input',e=>{soQ=e.target.value.toLowerCase();renderSoCards();});
+  const soReasonOk=()=>{const el=document.getElementById('soReason');return !!(el&&el.value.trim());};
+  const soDateOk=()=>{const el=document.getElementById('soDate');return !!(el&&el.value.trim());};
+  ['soReason','soDate','soBy'].forEach(id=>{const el=document.getElementById(id);if(el){el.addEventListener('input',()=>updateSoBar());el.addEventListener('change',()=>updateSoBar());}});
+  function updateSoBar(){const sel=P.filter(p=>(p.out||0)>0);const units=sel.reduce((s,p)=>s+p.out,0);
+    document.getElementById('soTotalUnits').textContent=units;document.getElementById('soTotalItems').textContent=sel.length;
+    document.getElementById('soRemoveBtn').disabled=!(units>0&&soReasonOk()&&soDateOk());
+    const h=document.getElementById('soHint');if(h)h.textContent=units<=0?' · pick at least 1 unit':(!soReasonOk()?' · pick a reason':(!soDateOk()?' · pick a date':''));}
+  function renderSoList(){const el=document.getElementById('soList');const outs=D.filter(d=>d.dir==='out');
+    if(!outs.length){el.innerHTML='<div class="calnote">No stock-outs logged yet.</div>';return;}
+    el.innerHTML=outs.slice(0,20).map(d=>{const meta=[d.reason?esc(d.reason):'',d.receivedBy?'by '+esc(d.receivedBy):''].filter(Boolean).join(' · ');
+      return `<div class="drow"><div><b>${esc(d.product||'')}</b> <span class="minus">&minus;${d.qty}</span>${meta?`<div class="sub">${meta}</div>`:''}</div><div class="drowr"><span class="sub">${d.date?prettyMs(d.date):''}</span><button class="mini void" data-void="${d.id}">Void</button></div></div>`;}).join('');}
+  const soRemoveBtn=document.getElementById('soRemoveBtn');
+  soRemoveBtn.addEventListener('click',async()=>{const sel=P.filter(p=>(p.out||0)>0);const units=sel.reduce((s,p)=>s+p.out,0);if(!units)return;
+    const reason=document.getElementById('soReason').value;const date=dlv('soDate')||todayKey();const by=dlv('soBy');
+    if(!reason){modal(false,'Pick a reason','Choose why the stock is going out first.');return;}
+    const ok=await confirmModal('Remove from stock?',`${units} unit${units===1?'':'s'} across ${sel.length} product${sel.length===1?'':'s'} will be logged as “${reason}”.`,'Yes, remove');
+    if(!ok)return;
+    soRemoveBtn.disabled=true;soRemoveBtn.textContent='Removing…';
+    const failed=[];
+    for(const p of sel){
+      try{const r=await fetch('/api/stockout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({productId:p.id,productName:p.name,qty:p.out,date,reason,by})});
+        const j=await r.json();if(!j.ok)throw new Error(j.error||'failed');
+        p.stock-=p.out; // optimistic
+      }catch(e){failed.push(p.name);}
+    }
+    P.forEach(p=>p.out=0);
+    renderSoCards();updateSoBar();renderStocks();
+    await loadDeliveries();renderSoList();
+    if(failed.length)modal(false,'Some items did not save',`Could not remove: ${failed.join(', ')}. Please try those again.`);
+    else modal(true,'Stock updated',`&minus;${units} unit${units===1?'':'s'} removed and logged.`.replace('&minus;','−'));
+    soRemoveBtn.textContent='− Remove from stock';updateSoBar();
+    setTimeout(async()=>{await loadProducts();P.forEach(p=>{p.out=0;p.recv=0;});renderSoCards();renderStocks();renderCards();},1500);});
+
+  // ---------- Void a movement (undo delivery / stock-out) ----------
+  async function voidMovement(id){if(!id)return;
+    const ok=await confirmModal('Void this entry?','This reverses its effect on stock. The record is kept in Lark but no longer counts.','Yes, void');if(!ok)return;
+    try{const r=await fetch('/api/deliveries/void',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});const j=await r.json();if(!j.ok)throw new Error(j.error||'failed');
+      await loadDeliveries();renderDeliveries();renderSoList();
+      await loadProducts();P.forEach(p=>{p.out=0;p.recv=0;});renderStocks();renderSoCards();renderDlCards();renderCards();
+      modal(true,'Entry voided','Stock has been adjusted back.');}
+    catch(e){modal(false,'Could not void',String(e.message||e));}}
+  document.getElementById('soList').addEventListener('click',e=>{const b=e.target.closest('[data-void]');if(b)voidMovement(b.dataset.void);});
+  document.getElementById('dlList').addEventListener('click',e=>{const b=e.target.closest('[data-void]');if(b)voidMovement(b.dataset.void);});
+
+  // ---------- Reports (monthly movement + CSV) ----------
+  let repY,repM;
+  {const n=new Date();repY=n.getFullYear();repM=n.getMonth();}
+  function monthMovements(){return D.filter(d=>{if(!d.date)return false;const [y,m]=keyFromMs(d.date).split('-').map(Number);return y===repY&&(m-1)===repM;});}
+  function renderReport(){
+    document.getElementById('repMonth').textContent=`${MONTHS[repM]} ${repY}`;
+    const mv=monthMovements();const byProd={};let tin=0,tout=0;
+    mv.forEach(d=>{const key=d.product||'(unknown)';byProd[key]=byProd[key]||{in:0,out:0};if(d.dir==='out'){byProd[key].out+=d.qty;tout+=d.qty;}else{byProd[key].in+=d.qty;tin+=d.qty;}});
+    const net=tin-tout;
+    const tiles=[['Delivered in',(tin?'+':'')+tin,'var(--good-ink)'],['Stock out',(tout?'−':'')+tout,'var(--warn)'],['Net change',(net>0?'+':'')+net,''],['Movements',mv.length,'']];
+    document.getElementById('repTiles').innerHTML=tiles.map(k=>`<div class="tile"><div class="big" ${k[2]?`style="color:${k[2]}"`:''}>${k[1]}</div><div class="lbl">${k[0]}</div></div>`).join('');
+    const rows=document.getElementById('repRows');const names=Object.keys(byProd).sort();
+    rows.innerHTML=names.length?names.map(n=>{const v=byProd[n];const nt=v.in-v.out;return `<tr><td><b>${esc(n)}</b></td><td class="plus">${v.in?'+'+v.in:'—'}</td><td class="minus">${v.out?'−'+v.out:'—'}</td><td><b>${nt>0?'+':''}${nt}</b></td></tr>`;}).join(''):'<tr><td colspan="4" class="pcat">No movements this month.</td></tr>';
+  }
+  document.getElementById('repPrev').addEventListener('click',()=>{repM--;if(repM<0){repM=11;repY--;}renderReport();});
+  document.getElementById('repNext').addEventListener('click',()=>{repM++;if(repM>11){repM=0;repY++;}renderReport();});
+  document.getElementById('repExport').addEventListener('click',()=>{
+    const mv=monthMovements().slice().sort((a,b)=>(a.date||0)-(b.date||0));
+    const out=[['Date','Type','Product','Quantity','Reason / From','Logged by']];
+    mv.forEach(d=>out.push([d.date?keyFromMs(d.date):'',d.dir==='out'?'OUT':'IN',d.product||'',(d.dir==='out'?'-':'+')+d.qty,d.dir==='out'?(d.reason||''):(d.from||''),d.receivedBy||'']));
+    const csv=out.map(r=>r.map(c=>{const s=String(c==null?'':c);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}).join(',')).join('\n');
+    const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');
+    a.href=url;a.download=`hiessence-stock-${repY}-${pad(repM+1)}.csv`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  });
+
   // ---------- navigation ----------
-  const LABELS={dash:'Dashboard',new:'Production / New Shoot',cal:'Production / Calendar',stocks:'Inventory / Stocks',deliveries:'Inventory / Deliveries',insights:'Tools / Insights'};
+  const LABELS={dash:'Dashboard',new:'Production / New Shoot',cal:'Production / Calendar',stocks:'Inventory / Stocks',deliveries:'Inventory / Deliveries',stockout:'Inventory / Stock Out',insights:'Tools / Insights',reports:'Tools / Reports'};
   let productsLoaded=false;
   async function ensureProducts(){if(!productsLoaded){await loadProducts();productsLoaded=true;}}
   async function go(v){
@@ -561,15 +706,18 @@
     document.getElementById('crumb').textContent=LABELS[v];
     document.getElementById('bar').classList.toggle('on',v==='new');
     document.getElementById('dlbar').classList.toggle('on',v==='deliveries');
+    document.getElementById('sobar').classList.toggle('on',v==='stockout');
     window.scrollTo(0,0);
     if(v==='new'){await ensureProducts();renderCards();updateBar();}
     if(v==='stocks'){await ensureProducts();renderStocks();}
     if(v==='deliveries'){await ensureProducts();P.forEach(p=>p.recv=0);const dd=document.getElementById('dlDate');if(dd&&!dd.value)dd.value=todayKey();renderDlCards();updateDlBar();await loadDeliveries();renderDeliveries();}
+    if(v==='stockout'){await ensureProducts();P.forEach(p=>p.out=0);const sd=document.getElementById('soDate');if(sd&&!sd.value)sd.value=todayKey();renderSoCards();updateSoBar();await loadDeliveries();renderSoList();}
+    if(v==='reports'){await ensureProducts();await loadDeliveries();renderReport();}
     if(v==='cal'){await loadShoots();renderCal();}
     if(v==='dash'||v==='insights'){await ensureProducts();await loadShoots();await loadDeliveries();renderDash();}
   }
   document.querySelectorAll('.navitem').forEach(n=>n.addEventListener('click',()=>{if(n.dataset.view==='new')resetEditMode();go(n.dataset.view);}));
-  document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>{if(b.dataset.go==='new')resetEditMode();go(b.dataset.go);}));
+  document.addEventListener('click',e=>{const b=e.target.closest('[data-go]');if(!b)return;if(b.dataset.go==='new')resetEditMode();go(b.dataset.go);});
 
   // initial: dashboard
   go('dash');

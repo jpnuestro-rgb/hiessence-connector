@@ -494,11 +494,14 @@ async function getDeliveries() {
     if (j.code !== 0) throw new Error(`list deliveries failed: ${j.code} ${j.msg}`);
     for (const rec of j.data.items || []) {
       const f = rec.fields || {};
+      const raw = readNumber(f["Quantity Received"]);
       items.push({
         id: rec.record_id,
         no: readText(f["Delivery No."]),
         product: readText(f["Product"]),
-        qty: readNumber(f["Quantity Received"]),
+        qty: Math.abs(raw),
+        dir: raw < 0 ? "out" : "in", // negative = stock-out (usage/damage/correction)
+        reason: readText(f["Reason"]),
         date: readDateMs(f["Date Received"]),
         receivedBy: readText(f["Received By"]),
         from: readText(f["From"]),
@@ -506,7 +509,7 @@ async function getDeliveries() {
     }
     pageToken = j.data.has_more ? j.data.page_token : "";
   } while (pageToken);
-  // drop blank rows, newest first
+  // drop voided/blank rows (quantity 0), newest first
   return items.filter((x) => x.qty > 0).sort((a, b) => (b.date || 0) - (a.date || 0));
 }
 
@@ -661,7 +664,7 @@ async function ensureDeliveryFields() {
     const j = await larkGet(`${CFG.domain}/open-apis/bitable/v1/apps/${appToken}/tables/${CFG.tblDeliveries}/fields?page_size=200`);
     if (j.code === 0 && j.data) {
       const have = new Set((j.data.items || []).map((f) => f.field_name));
-      for (const name of ["Received By", "From"]) {
+      for (const name of ["Received By", "From", "Reason"]) {
         if (!have.has(name)) {
           await larkPost(`${CFG.domain}/open-apis/bitable/v1/apps/${appToken}/tables/${CFG.tblDeliveries}/fields`, { field_name: name, type: 1 });
         }
@@ -695,6 +698,53 @@ async function createDelivery(body) {
   const res = await larkPost(recUrl(appToken, CFG.tblDeliveries), { fields });
   if (res.code !== 0) throw new Error(`create delivery failed: ${res.code} ${res.msg}`);
   return { id: res.data.record.record_id };
+}
+
+// Log a stock-out (usage / damage / correction) as a NEGATIVE movement on the same
+// Deliveries ledger. The Product's "Total Received" rollup sums this in, so stock
+// drops automatically — no Lark formula changes needed.
+async function createStockOut(body) {
+  const { productId, productName, qty, date, reason, by } = body || {};
+  const q = Math.abs(Number(qty) || 0);
+  if (!productId || q <= 0) {
+    const err = new Error("Pick a product and a quantity greater than 0.");
+    err.status = 400;
+    throw err;
+  }
+  const r = String(reason || "").trim();
+  if (!r) { const e = new Error("Pick a reason for the stock-out."); e.status = 400; throw e; }
+  await ensureDeliveryFields();
+  const appToken = await baseAppToken();
+  const fields = {
+    "Delivery No.": `OUT: ${productName || "Stock"} ×${q} (${r})`,
+    "Product": [productId],
+    "Quantity Received": -q,
+  };
+  if (date) fields["Date Received"] = new Date(`${date}T00:00:00`).getTime();
+  if (_deliveryFieldsReady) {
+    fields["Reason"] = r;
+    if (by) fields["Received By"] = String(by);
+  }
+  const res = await larkPost(recUrl(appToken, CFG.tblDeliveries), { fields });
+  if (res.code !== 0) throw new Error(`create stock-out failed: ${res.code} ${res.msg}`);
+  return { id: res.data.record.record_id };
+}
+
+// Void a movement (delivery OR stock-out): set its quantity to 0 so it stops
+// affecting stock, and tag its label. Non-destructive — the row stays for the
+// audit trail, and the change is reversible by editing the record in Lark.
+async function voidDelivery(body) {
+  const { id } = body || {};
+  if (!id) { const e = new Error("Missing record id."); e.status = 400; throw e; }
+  const appToken = await baseAppToken();
+  const g = await larkGet(recUrl(appToken, CFG.tblDeliveries, `/${id}`));
+  let label = "";
+  if (g.code === 0 && g.data && g.data.record) label = readText(g.data.record.fields["Delivery No."]);
+  const fields = { "Quantity Received": 0 };
+  if (label && !/^VOID:/.test(label)) fields["Delivery No."] = `VOID: ${label}`;
+  const res = await larkPut(recUrl(appToken, CFG.tblDeliveries, `/${id}`), { fields });
+  if (res.code !== 0) throw new Error(`void failed: ${res.code} ${res.msg}`);
+  return { id };
 }
 
 // ---- HTTP plumbing ----------------------------------------------------------
@@ -875,6 +925,14 @@ const server = http.createServer(async (req, res) => {
     if (url === "/api/deliveries" && req.method === "POST") {
       const body = await readBody(req);
       const out = await createDelivery(body);
+      return sendJson(res, 200, { ok: true, ...out });
+    }
+    if (url === "/api/stockout" && req.method === "POST") {
+      const out = await createStockOut(await readBody(req));
+      return sendJson(res, 200, { ok: true, ...out });
+    }
+    if (url === "/api/deliveries/void" && req.method === "POST") {
+      const out = await voidDelivery(await readBody(req));
       return sendJson(res, 200, { ok: true, ...out });
     }
     if (url === "/api/shoots" && req.method === "POST") {
