@@ -287,9 +287,9 @@
         <p class="lead">Set how many units arrived with &minus; / +, then add them to stock. Every change is logged.</p>
         <div class="section"><h2>Delivery details</h2>
           <div class="grid2">
-            <div class="field"><label class="f">Received by</label><input id="dlReceivedBy" placeholder="Who received it"></div>
-            <div class="field"><label class="f">From / Supplier</label><input id="dlFrom" placeholder="Where it came from (e.g. Pasig warehouse)"></div>
-            <div class="field"><label class="f">Date received</label><input id="dlDate" type="date" onclick="this.showPicker&&this.showPicker()"></div>
+            <div class="field"><label class="f">Received by <span class="req">*</span></label><input id="dlReceivedBy" placeholder="Who received it"></div>
+            <div class="field"><label class="f">From / Supplier <span class="req">*</span></label><input id="dlFrom" placeholder="Where it came from (e.g. Pasig warehouse)"></div>
+            <div class="field"><label class="f">Date received <span class="req">*</span></label><input id="dlDate" type="date" onclick="this.showPicker&&this.showPicker()"></div>
           </div>
         </div>
         <div class="section"><h2>Add stock</h2>
@@ -316,7 +316,7 @@
 <!-- STICKY BAR (New Shoot) -->
 <div class="bar" id="bar"><div class="barin"><div class="summ"><b id="totalUnits">0</b> units · <span id="totalItems">0</span> products<span id="hint" style="color:var(--warn)"></span></div><button class="btn" id="createBtn" disabled>Create PR Shoot →</button></div></div>
 <!-- STICKY BAR (Deliveries) -->
-<div class="bar" id="dlbar"><div class="barin"><div class="summ"><b id="dlTotalUnits">0</b> units · <span id="dlTotalItems">0</span> products to add</div><button class="btn" id="dlAddBtn" disabled>+ Add to stock</button></div></div>
+<div class="bar" id="dlbar"><div class="barin"><div class="summ"><b id="dlTotalUnits">0</b> units · <span id="dlTotalItems">0</span> products to add<span id="dlHint" style="color:var(--warn)"></span></div><button class="btn" id="dlAddBtn" disabled>+ Add to stock</button></div></div>
 
 <!-- MODAL -->
 <div class="overlay" id="overlay"><div class="modal">
@@ -453,20 +453,24 @@
   dlCardsEl.addEventListener('blur',e=>{const inp=e.target.closest&&e.target.closest('.qtyin');if(!inp)return;const card=e.target.closest('.card');if(!card)return;const p=P.find(x=>x.id===card.dataset.id);if(!p)return;let v=parseInt(inp.value,10);if(!Number.isFinite(v)||v<0)v=0;p.recv=v;inp.value=v;},true);
   document.getElementById('dlTabs').addEventListener('click',e=>{const t=e.target.closest('.tab');if(!t)return;document.querySelectorAll('#dlTabs .tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');dlFilterCat=t.dataset.cat;renderDlCards();});
   document.getElementById('dlSearch').addEventListener('input',e=>{dlQ=e.target.value.toLowerCase();renderDlCards();});
+  const dlv=id=>{const el=document.getElementById(id);return el?el.value.trim():'';};
+  function dlDetailsOk(){return !!(dlv('dlReceivedBy')&&dlv('dlFrom')&&dlv('dlDate'));}
+  ['dlReceivedBy','dlFrom','dlDate'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('input',()=>updateDlBar());});
   function updateDlBar(){const sel=P.filter(p=>(p.recv||0)>0);const units=sel.reduce((s,p)=>s+p.recv,0);
     document.getElementById('dlTotalUnits').textContent=units;document.getElementById('dlTotalItems').textContent=sel.length;
-    document.getElementById('dlAddBtn').disabled=units<=0;}
+    document.getElementById('dlAddBtn').disabled=!(units>0&&dlDetailsOk());
+    const h=document.getElementById('dlHint');if(h)h.textContent=units<=0?' · pick at least 1 unit':(!dlDetailsOk()?' · fill Received by, From & Date':'');}
   function renderDeliveries(){const el=document.getElementById('dlList');
     if(!D.length){el.innerHTML='<div class="calnote">No deliveries logged yet.</div>';return;}
     el.innerHTML=D.slice(0,20).map(d=>{const meta=[d.from?'from '+esc(d.from):'',d.receivedBy?'received by '+esc(d.receivedBy):''].filter(Boolean).join(' · ');
       return `<div class="drow"><div><b>${esc(d.product||'')}</b> <span class="plus">+${d.qty}</span>${meta?`<div class="sub">${meta}</div>`:''}</div><div class="sub">${d.date?prettyMs(d.date):''}</div></div>`;}).join('');}
   const dlAddBtn=document.getElementById('dlAddBtn');
   dlAddBtn.addEventListener('click',async()=>{const sel=P.filter(p=>(p.recv||0)>0);const units=sel.reduce((s,p)=>s+p.recv,0);if(!units)return;
+    if(!dlDetailsOk()){modal(false,'Missing details','Fill in Received by, From, and Date first.');return;}
     const ok=await confirmModal('Add to stock?',`${units} unit${units===1?'':'s'} across ${sel.length} product${sel.length===1?'':'s'} will be logged as a delivery.`,'Yes, add');
     if(!ok)return;
     dlAddBtn.disabled=true;dlAddBtn.textContent='Adding…';
-    const dv=id=>{const el=document.getElementById(id);return el?el.value.trim():'';};
-    const date=dv('dlDate')||todayKey();const receivedBy=dv('dlReceivedBy'),from=dv('dlFrom');
+    const date=dlv('dlDate')||todayKey();const receivedBy=dlv('dlReceivedBy'),from=dlv('dlFrom');
     const failed=[];
     for(const p of sel){
       try{const r=await fetch('/api/deliveries',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({productId:p.id,productName:p.name,qty:p.recv,date,receivedBy,from})});
